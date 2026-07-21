@@ -109,7 +109,9 @@ pub fn run() {
                     .build(),
             )?;
 
-            app.global_shortcut().register(shortcut)?;
+            if let Err(error) = app.global_shortcut().register(shortcut) {
+                eprintln!("Mado shortcut was not registered: {error}");
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
