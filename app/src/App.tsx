@@ -1,23 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Bot,
-  Camera,
-  Check,
-  Copy,
   FileText,
-  FolderSearch,
-  History,
-  Languages,
   Loader2,
+  MessageSquarePlus,
+  Mic,
   Moon,
-  PanelTop,
-  Paperclip,
   Send,
   Settings,
   ShieldCheck,
-  Sparkles,
   Sun,
-  Trash2,
   Upload
 } from "lucide-react";
 import type { AttachedFile, Message, OperationPreview, Provider, ProviderSettings } from "./types";
@@ -54,7 +45,8 @@ function App() {
   const [files, setFiles] = useState<AttachedFile[]>([]);
   const [preview, setPreview] = useState<OperationPreview | null>(null);
   const [isBusy, setIsBusy] = useState(false);
-  const [activePanel, setActivePanel] = useState<"chat" | "files" | "settings">("chat");
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isVoiceMode, setIsVoiceMode] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const latestUserText = useMemo(() => {
@@ -72,6 +64,18 @@ function App() {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "n") {
+        event.preventDefault();
+        handleNewChat();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   async function handleSend() {
     const text = input.trim();
     if (!text || isBusy) {
@@ -86,7 +90,6 @@ function App() {
     if (looksLikeFileOperation(text)) {
       const operation = await planFileOperation(text);
       setPreview(operation);
-      setActivePanel("files");
     }
 
     const answer = await askProvider(text, settings.provider, settings.model);
@@ -112,7 +115,6 @@ function App() {
   async function handleFiles(incoming: FileList | File[]) {
     const parsed = await Promise.all(Array.from(incoming).map(readFile));
     setFiles((current) => [...parsed, ...current].slice(0, 8));
-    setActivePanel("files");
   }
 
   function updateProvider(provider: Provider) {
@@ -124,73 +126,102 @@ function App() {
     }));
   }
 
+  function handleNewChat() {
+    setMessages([welcome]);
+    setInput("");
+    setFiles([]);
+    setPreview(null);
+    setIsSettingsOpen(false);
+  }
+
   return (
     <main className="shell">
-      <section className="topbar" aria-label="Mado controls">
-        <button className="brand" type="button" onClick={() => setActivePanel("chat")} title="Mado">
-          <PanelTop size={18} />
-          <span>Mado</span>
-        </button>
-        <div className="topbar-actions">
-          <button type="button" className="icon-button" title="会話" onClick={() => setActivePanel("chat")}>
-            <Bot size={18} />
-          </button>
-          <button type="button" className="icon-button" title="ファイル" onClick={() => setActivePanel("files")}>
-            <Paperclip size={18} />
-          </button>
-          <button type="button" className="icon-button" title="設定" onClick={() => setActivePanel("settings")}>
-            <Settings size={18} />
-          </button>
-        </div>
-      </section>
+      <section
+        className="mado-panel"
+        aria-label="Mado"
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => {
+          event.preventDefault();
+          void handleFiles(event.dataTransfer.files);
+        }}
+      >
+        <form
+          className="prompt-row"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleSend();
+          }}
+        >
+          <div className="input-wrap">
+            <textarea
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              placeholder="こんにちは"
+              rows={1}
+              onKeyDown={(event) => {
+                if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                  void handleSend();
+                }
+              }}
+            />
+            <button
+              className={`mic-button ${isVoiceMode ? "active" : ""}`}
+              type="button"
+              onClick={() => setIsVoiceMode((current) => !current)}
+              title="音声入力に切り替え"
+              aria-pressed={isVoiceMode}
+            >
+              <Mic size={17} />
+            </button>
+          </div>
+          <div className="panel-actions" aria-label="操作">
+            <button className="icon-button send-icon" type="submit" disabled={!input.trim() || isBusy} title="送信">
+              <Send size={22} />
+            </button>
+            <button className="icon-button" type="button" onClick={handleNewChat} title="新規チャット Ctrl+Shift+N">
+              <MessageSquarePlus size={21} />
+            </button>
+            <button
+              className={`icon-button ${isSettingsOpen ? "active" : ""}`}
+              type="button"
+              onClick={() => setIsSettingsOpen((current) => !current)}
+              title="設定"
+              aria-expanded={isSettingsOpen}
+            >
+              <Settings size={22} />
+            </button>
+          </div>
+        </form>
 
-      <section className="workspace">
-        <section className="conversation" aria-label="Conversation">
+        <section className="conversation-board" aria-label="会話">
           <div className="message-list">
             {messages.map((message) => (
               <article className={`message ${message.role}`} key={message.id}>
-                <div className="message-icon">
-                  {message.role === "user" ? <Sparkles size={15} /> : <Bot size={15} />}
-                </div>
                 <p>{message.content}</p>
               </article>
             ))}
+            {preview && <OperationPreviewCard preview={preview} />}
+            {files.length > 0 && <FileSummary files={files} />}
             {isBusy && (
-              <article className="message assistant">
-                <div className="message-icon">
-                  <Loader2 className="spin" size={15} />
-                </div>
+              <article className="message assistant status">
+                <Loader2 className="spin" size={15} />
                 <p>考えています...</p>
               </article>
             )}
             <div ref={scrollRef} />
           </div>
+        </section>
 
-          <div className="quick-actions" aria-label="Quick actions">
-            <button type="button" onClick={handleTranslateSelection}>
-              <Languages size={16} />
-              和訳
-            </button>
-            <button type="button" onClick={handleScreenshot}>
-              <Camera size={16} />
-              スクショ
-            </button>
-            <button type="button" onClick={() => setPreview(null)}>
-              <ShieldCheck size={16} />
-              確認
-            </button>
-          </div>
-
-          <label
-            className="drop-strip"
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => {
-              event.preventDefault();
-              void handleFiles(event.dataTransfer.files);
-            }}
-          >
-            <Upload size={16} />
-            <span>{files.length ? `${files.length} 件のファイルを保持中` : "ファイルをドロップ、または選択"}</span>
+        <div className="utility-row" aria-label="補助操作">
+          <button type="button" onClick={handleTranslateSelection}>
+            和訳
+          </button>
+          <button type="button" onClick={handleScreenshot}>
+            スクショ
+          </button>
+          <label className="file-picker">
+            <Upload size={14} />
+            <span>{files.length ? `${files.length} 件` : "ファイル"}</span>
             <input
               type="file"
               multiple
@@ -202,123 +233,57 @@ function App() {
               }}
             />
           </label>
-
-          <form
-            className="composer"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void handleSend();
-            }}
-          >
-            <textarea
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              placeholder="短い質問、和訳、ファイル操作を入力"
-              rows={3}
-              onKeyDown={(event) => {
-                if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-                  void handleSend();
-                }
-              }}
-            />
-            <button className="send-button" type="submit" disabled={!input.trim() || isBusy} title="送信">
-              <Send size={18} />
+          {preview && (
+            <button type="button" onClick={() => setPreview(null)}>
+              プレビューを閉じる
             </button>
-          </form>
-        </section>
-
-        <aside className="panel" aria-label="Side panel">
-          {activePanel === "chat" && <HistoryPanel messages={messages} />}
-          {activePanel === "files" && <FilesPanel files={files} preview={preview} />}
-          {activePanel === "settings" && (
-            <SettingsPanel settings={settings} setSettings={setSettings} updateProvider={updateProvider} />
           )}
-        </aside>
+        </div>
+
+        {isSettingsOpen && (
+          <aside className="settings-popover" aria-label="設定">
+            <SettingsPanel settings={settings} setSettings={setSettings} updateProvider={updateProvider} />
+          </aside>
+        )}
       </section>
     </main>
   );
 }
 
-function HistoryPanel({ messages }: { messages: Message[] }) {
+function OperationPreviewCard({ preview }: { preview: OperationPreview }) {
   return (
-    <div className="panel-section">
-      <div className="panel-title">
-        <History size={16} />
-        <h2>履歴</h2>
+    <article className={`operation-preview ${preview.action === "delete" ? "danger" : ""}`}>
+      <div className="preview-heading">
+        <ShieldCheck size={16} />
+        <strong>{preview.summary}</strong>
       </div>
-      <div className="history-list">
-        {messages
-          .filter((message) => message.role === "user")
-          .slice(-6)
-          .reverse()
-          .map((message) => (
-            <p key={message.id}>{message.content}</p>
+      <p>元: {preview.source}</p>
+      {preview.destination && <p>先: {preview.destination}</p>}
+      {preview.warnings.map((warning) => (
+        <p className="warning" key={warning}>
+          {warning}
+        </p>
+      ))}
+      {preview.files.length > 0 && (
+        <div className="file-list compact">
+          {preview.files.map((file) => (
+            <div className="file-row" key={file.path}>
+              <FileText size={15} />
+              <span>{file.name}</span>
+            </div>
           ))}
-      </div>
-    </div>
+        </div>
+      )}
+    </article>
   );
 }
 
-function FilesPanel({ files, preview }: { files: AttachedFile[]; preview: OperationPreview | null }) {
+function FileSummary({ files }: { files: AttachedFile[] }) {
   return (
-    <div className="panel-section">
-      <div className="panel-title">
-        <FolderSearch size={16} />
-        <h2>ファイル</h2>
-      </div>
-
-      {preview && (
-        <div className={`operation-preview ${preview.action === "delete" ? "danger" : ""}`}>
-          <div className="preview-heading">
-            {preview.action === "delete" ? <Trash2 size={17} /> : <ShieldCheck size={17} />}
-            <strong>{preview.summary}</strong>
-          </div>
-          <dl>
-            <div>
-              <dt>元</dt>
-              <dd>{preview.source}</dd>
-            </div>
-            {preview.destination && (
-              <div>
-                <dt>先</dt>
-                <dd>{preview.destination}</dd>
-              </div>
-            )}
-          </dl>
-          {preview.warnings.map((warning) => (
-            <p className="warning" key={warning}>
-              {warning}
-            </p>
-          ))}
-          <div className="file-list compact">
-            {preview.files.map((file) => (
-              <div className="file-row" key={file.path}>
-                <FileText size={16} />
-                <span>{file.name}</span>
-              </div>
-            ))}
-          </div>
-          <button type="button" className="confirm-button" disabled>
-            <Check size={16} />
-            実行は未実装
-          </button>
-        </div>
-      )}
-
-      <div className="file-list">
-        {files.length === 0 && <p className="empty">テキスト、Markdown、HTML はプレビューできます。</p>}
-        {files.map((file) => (
-          <article className="file-card" key={file.id}>
-            <div>
-              <FileText size={16} />
-              <strong>{file.name}</strong>
-            </div>
-            <p>{formatBytes(file.size)} / {file.status === "ready" ? "読取済み" : "プレビュー対象外"}</p>
-            {file.text && <pre>{file.text.slice(0, 360)}</pre>}
-          </article>
-        ))}
-      </div>
-    </div>
+    <article className="file-summary">
+      <FileText size={15} />
+      <p>{files.length} 件のファイルを保持中</p>
+    </article>
   );
 }
 
@@ -460,16 +425,6 @@ async function readFile(file: File): Promise<AttachedFile> {
       status: "error"
     };
   }
-}
-
-function formatBytes(value: number) {
-  if (value < 1024) {
-    return `${value} B`;
-  }
-  if (value < 1024 * 1024) {
-    return `${(value / 1024).toFixed(1)} KB`;
-  }
-  return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
 
 export default App;
