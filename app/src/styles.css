@@ -250,6 +250,28 @@ button {
   min-height: 250px;
   overflow: auto;
   padding: 0;
+  scrollbar-gutter: stable;
+}
+
+.message-list::before {
+  content: "";
+  margin-top: auto;
+}
+
+.message-list::-webkit-scrollbar,
+.settings-popover::-webkit-scrollbar {
+  width: 8px;
+}
+
+.message-list::-webkit-scrollbar-thumb,
+.settings-popover::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.message-list::-webkit-scrollbar-track,
+.settings-popover::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .message {
@@ -490,6 +512,66 @@ button {
 
 .settings-note {
   margin: 0;
+}
+
+.shortcut-section {
+  display: grid;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.shortcut-section h3 {
+  margin: 0;
+  color: rgba(244, 244, 240, 0.78);
+  font-size: 0.86rem;
+}
+
+[data-theme="light"] .shortcut-section h3 {
+  color: rgba(34, 38, 34, 0.74);
+}
+
+.shortcut-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.shortcut-list div {
+  display: grid;
+  grid-template-columns: minmax(116px, auto) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.shortcut-list dt,
+.shortcut-list dd {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.shortcut-list dt {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 3px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: rgba(244, 244, 240, 0.9);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.shortcut-list dd {
+  color: rgba(244, 244, 240, 0.68);
+}
+
+[data-theme="light"] .shortcut-list dt {
+  border-color: rgba(34, 38, 34, 0.14);
+  color: rgba(34, 38, 34, 0.86);
+  background: rgba(34, 38, 34, 0.05);
+}
+
+[data-theme="light"] .shortcut-list dd {
+  color: rgba(34, 38, 34, 0.64);
 }
 
 .spin {

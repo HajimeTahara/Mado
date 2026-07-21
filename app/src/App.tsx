@@ -221,7 +221,8 @@ function App() {
               placeholder="こんにちは"
               rows={1}
               onKeyDown={(event) => {
-                if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                  event.preventDefault();
                   void handleSend();
                 }
               }}
@@ -403,6 +404,28 @@ function SettingsPanel({
       </label>
 
       <p className="settings-note">API キー保存と実プロバイダー接続は次の段階で OS の認証情報ストアに接続します。</p>
+
+      <section className="shortcut-section" aria-label="ショートカット">
+        <h3>ショートカット</h3>
+        <dl className="shortcut-list">
+          <div>
+            <dt>Enter</dt>
+            <dd>送信</dd>
+          </div>
+          <div>
+            <dt>Shift + Enter</dt>
+            <dd>改行</dd>
+          </div>
+          <div>
+            <dt>Ctrl + Shift + N</dt>
+            <dd>新規チャット</dd>
+          </div>
+          <div>
+            <dt>Ctrl + Alt + M</dt>
+            <dd>表示 / 非表示</dd>
+          </div>
+        </dl>
+      </section>
     </div>
   );
 }
