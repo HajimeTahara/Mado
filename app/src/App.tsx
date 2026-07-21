@@ -1,23 +1,37 @@
 import { useEffect, useRef, useState } from "react";
 import {
   FileText,
+  FolderOpen,
   Loader2,
   MessageSquarePlus,
   Mic,
   Moon,
+  Plus,
   Send,
   Settings,
   ShieldCheck,
   Sun,
   Upload
 } from "lucide-react";
-import type { AttachedFile, CodexProgressEvent, Message, OperationPreview, Provider, ProviderSettings } from "./types";
+import type {
+  AttachedFile,
+  CodexProgressEvent,
+  CodexProjectTrustStatus,
+  Message,
+  OpenedProject,
+  OperationPreview,
+  Provider,
+  ProviderSettings
+} from "./types";
 import {
   askProvider,
+  getCodexProjectTrustStatus,
   onCodexProgress,
   onWindowFocusChanged,
+  pickProjectFolder,
   planFileOperation,
   resetCodexConversation,
+  setCodexProjectTrust,
   startWindowDrag
 } from "./tauri";
 
@@ -44,12 +58,23 @@ const providerDefaults: Record<Provider, { model: string; endpoint: string }> = 
 
 const maxStoredMessages = 200;
 
+type TrustPrompt = {
+  status: CodexProjectTrustStatus;
+  selectedPath: string;
+  isApplying: boolean;
+  error?: string;
+};
+
 function App() {
   const [settings, setSettings] = useState<ProviderSettings>(() => readSettings());
   const [messages, setMessages] = useState<Message[]>(() => readMessages());
+  const [openedProject, setOpenedProject] = useState<OpenedProject | null>(() =>
+    readStorage<OpenedProject | null>("mado-opened-project", null)
+  );
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<AttachedFile[]>([]);
   const [preview, setPreview] = useState<OperationPreview | null>(null);
+  const [trustPrompt, setTrustPrompt] = useState<TrustPrompt | null>(null);
   const [progressEvents, setProgressEvents] = useState<CodexProgressEvent[]>([]);
   const [isBusy, setIsBusy] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -75,6 +100,14 @@ function App() {
   useEffect(() => {
     localStorage.setItem("mado-history", JSON.stringify(messages.slice(-maxStoredMessages)));
   }, [messages]);
+
+  useEffect(() => {
+    if (openedProject) {
+      localStorage.setItem("mado-opened-project", JSON.stringify(openedProject));
+    } else {
+      localStorage.removeItem("mado-opened-project");
+    }
+  }, [openedProject]);
 
   useEffect(() => {
     const list = messageListRef.current;
@@ -161,7 +194,7 @@ function App() {
     }
 
     try {
-      const answer = await askProvider(text, settings.provider, settings.model, messages);
+      const answer = await askProvider(text, settings.provider, settings.model, messages, openedProject?.path);
       setMessages((current) => [...current, makeMessage("assistant", answer)]);
     } finally {
       setIsBusy(false);
@@ -189,6 +222,53 @@ function App() {
     setPreview(null);
     setProgressEvents([]);
     setIsSettingsOpen(false);
+    void resetCodexConversation();
+  }
+
+  async function handleOpenProject() {
+    if (isBusy || trustPrompt) {
+      return;
+    }
+
+    try {
+      const selectedPath = await pickProjectFolder();
+      if (!selectedPath) {
+        return;
+      }
+      const status = await getCodexProjectTrustStatus(selectedPath);
+      if (status.trusted) {
+        openProject(status.projectPath, true);
+        return;
+      }
+      setTrustPrompt({ status, selectedPath, isApplying: false });
+    } catch (error) {
+      setMessages((current) => [...current, makeMessage("assistant", `プロジェクトを開けませんでした。\n\n${String(error)}`)]);
+    }
+  }
+
+  async function handleTrustDecision(trusted: boolean) {
+    if (!trustPrompt || trustPrompt.isApplying) {
+      return;
+    }
+
+    setTrustPrompt((current) => (current ? { ...current, isApplying: true, error: undefined } : current));
+    try {
+      const status = await setCodexProjectTrust(trustPrompt.selectedPath, trusted);
+      openProject(status.projectPath, status.trusted);
+      setTrustPrompt(null);
+    } catch (error) {
+      setTrustPrompt((current) =>
+        current ? { ...current, isApplying: false, error: `Codex trust 設定を更新できませんでした。\n${String(error)}` } : current
+      );
+    }
+  }
+
+  function openProject(path: string, trusted: boolean) {
+    setOpenedProject({ path, trusted });
+    setMessages([]);
+    setFiles([]);
+    setPreview(null);
+    setProgressEvents([]);
     void resetCodexConversation();
   }
 
@@ -241,6 +321,16 @@ function App() {
           }}
         >
           <div className="input-wrap">
+            <button
+              className={`project-button ${openedProject ? "active" : ""}`}
+              type="button"
+              onClick={() => void handleOpenProject()}
+              disabled={isBusy}
+              title={openedProject ? `プロジェクト: ${openedProject.path}` : "プロジェクトを開く"}
+              aria-label="プロジェクトを開く"
+            >
+              <Plus size={16} />
+            </button>
             <label className="upload-button" title="ファイルアップロード">
               <Upload size={16} />
               <input
@@ -257,7 +347,7 @@ function App() {
             <textarea
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder="こんにちは"
+              placeholder="Welcome to Mado!"
               rows={1}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -301,8 +391,63 @@ function App() {
             <SettingsPanel settings={settings} setSettings={setSettings} updateProvider={updateProvider} />
           </aside>
         )}
+        {trustPrompt && (
+          <TrustProjectDialog
+            prompt={trustPrompt}
+            onTrust={() => void handleTrustDecision(true)}
+            onOpenWithoutTrust={() => void handleTrustDecision(false)}
+            onCancel={() => setTrustPrompt(null)}
+          />
+        )}
       </section>
     </main>
+  );
+}
+
+function TrustProjectDialog({
+  prompt,
+  onTrust,
+  onOpenWithoutTrust,
+  onCancel
+}: {
+  prompt: TrustPrompt;
+  onTrust: () => void;
+  onOpenWithoutTrust: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section className="trust-dialog" role="dialog" aria-modal="true" aria-labelledby="trust-dialog-title">
+        <div className="trust-title">
+          <FolderOpen size={17} />
+          <h2 id="trust-dialog-title">Codex trust</h2>
+        </div>
+        <p>このプロジェクトを Codex の trusted project として登録しますか?</p>
+        <dl className="trust-details">
+          <div>
+            <dt>Project</dt>
+            <dd>{prompt.status.projectPath}</dd>
+          </div>
+          <div>
+            <dt>Codex config</dt>
+            <dd>{prompt.status.configPath}</dd>
+          </div>
+        </dl>
+        <p className="trust-note">Trust すると、このプロジェクト内の `.codex/config.toml` を Codex CLI が読み込みます。</p>
+        {prompt.error && <p className="trust-error">{prompt.error}</p>}
+        <div className="trust-actions">
+          <button type="button" onClick={onCancel} disabled={prompt.isApplying}>
+            キャンセル
+          </button>
+          <button type="button" onClick={onOpenWithoutTrust} disabled={prompt.isApplying}>
+            Trustせずに開く
+          </button>
+          <button type="button" className="primary" onClick={onTrust} disabled={prompt.isApplying}>
+            {prompt.isApplying ? "設定中..." : "Trustして開く"}
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
 

@@ -36,6 +36,7 @@ pub struct CodexProgressEvent {
 #[derive(Default)]
 struct CodexConversation {
     thread_id: Option<String>,
+    project_path: Option<String>,
 }
 
 impl CodexAgentState {
@@ -56,6 +57,7 @@ impl CodexAgentState {
         input: &str,
         model: &str,
         history: &[ChatHistoryMessage],
+        project_path: Option<&str>,
         progress: F,
     ) -> Result<String, String>
     where
@@ -65,7 +67,7 @@ impl CodexAgentState {
             .conversation
             .lock()
             .map_err(|_| "Codex 会話状態を取得できませんでした。".to_string())?;
-        conversation.ask(input, model, history, progress)
+        conversation.ask(input, model, history, project_path, progress)
     }
 }
 
@@ -75,14 +77,21 @@ impl CodexConversation {
         input: &str,
         model: &str,
         history: &[ChatHistoryMessage],
+        project_path: Option<&str>,
         mut progress: F,
     ) -> Result<String, String>
     where
         F: FnMut(CodexProgressEvent),
     {
+        let project_path = project_path.map(str::to_string);
+        if self.project_path != project_path {
+            self.thread_id = None;
+            self.project_path = project_path.clone();
+        }
+
         let prompt = build_codex_prompt(input, history);
         progress(status_event("codex/start", "Codex を起動しています..."));
-        let mut client = CodexAppServerClient::start("codex")?;
+        let mut client = CodexAppServerClient::start("codex", self.project_path.as_deref())?;
         client.initialize()?;
         progress(status_event("codex/initialized", "Codex に接続しました"));
 
@@ -93,7 +102,7 @@ impl CodexConversation {
             ));
             client.request(
                 "thread/resume",
-                thread_params(thread_id, model),
+                thread_params(thread_id, model, self.project_path.as_deref()),
                 CODEX_TIMEOUT,
             )?
         } else {
@@ -101,7 +110,11 @@ impl CodexConversation {
                 "thread/start",
                 "Codex thread を開始しています...",
             ));
-            client.request("thread/start", thread_params("", model), CODEX_TIMEOUT)?
+            client.request(
+                "thread/start",
+                thread_params("", model, self.project_path.as_deref()),
+                CODEX_TIMEOUT,
+            )?
         };
 
         let thread_id = extract_thread_id(&thread_result)
@@ -111,7 +124,7 @@ impl CodexConversation {
 
         client.request(
             "turn/start",
-            turn_params(&thread_id, &prompt, model),
+            turn_params(&thread_id, &prompt, model, self.project_path.as_deref()),
             CODEX_TIMEOUT,
         )?;
         progress(status_event("turn/start", "応答ターンを開始しました"));
@@ -128,10 +141,13 @@ struct CodexAppServerClient {
 }
 
 impl CodexAppServerClient {
-    fn start(executable: &str) -> Result<Self, String> {
+    fn start(executable: &str, cwd: Option<&str>) -> Result<Self, String> {
         let command_spec = resolve_codex_command(executable);
         let mut command = Command::new(&command_spec.program);
         command.args(&command_spec.prefix_args);
+        if let Some(cwd) = cwd.filter(|value| !value.trim().is_empty()) {
+            command.current_dir(cwd);
+        }
         command
             .args(["app-server", "--stdio"])
             .stdin(Stdio::piped())
@@ -593,7 +609,7 @@ impl Drop for CodexAppServerClient {
     }
 }
 
-fn thread_params(thread_id: &str, model: &str) -> Value {
+fn thread_params(thread_id: &str, model: &str, cwd: Option<&str>) -> Value {
     let mut params = json!({
         "approvalPolicy": "on-request",
         "approvalsReviewer": "user"
@@ -604,10 +620,13 @@ fn thread_params(thread_id: &str, model: &str) -> Value {
     if !model.trim().is_empty() {
         params["model"] = json!(model.trim());
     }
+    if let Some(cwd) = cwd.filter(|value| !value.trim().is_empty()) {
+        params["cwd"] = json!(cwd);
+    }
     params
 }
 
-fn turn_params(thread_id: &str, prompt: &str, model: &str) -> Value {
+fn turn_params(thread_id: &str, prompt: &str, model: &str, cwd: Option<&str>) -> Value {
     let mut params = json!({
         "threadId": thread_id,
         "input": [{
@@ -620,6 +639,9 @@ fn turn_params(thread_id: &str, prompt: &str, model: &str) -> Value {
     });
     if !model.trim().is_empty() {
         params["model"] = json!(model.trim());
+    }
+    if let Some(cwd) = cwd.filter(|value| !value.trim().is_empty()) {
+        params["cwd"] = json!(cwd);
     }
     params
 }

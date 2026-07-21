@@ -143,6 +143,8 @@ Alternative:
 | Icons | lucide-react | ボタンやパネルのアイコン |
 | Tauri plugin | tauri-plugin-global-shortcut | `Ctrl+Alt+M` の表示 / 非表示ショートカット |
 | Rust crates | serde / serde_json | Tauri コマンドの入出力データ整形 |
+| Rust crates | rfd | ネイティブフォルダ選択ダイアログ |
+| Rust crates | toml_edit | Codex user config の project trust 設定更新 |
 | External tool | Codex CLI | `app-server --stdio` 経由の Codex agent 会話 |
 
 ## Project Structure

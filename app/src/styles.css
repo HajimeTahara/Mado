@@ -116,7 +116,7 @@ button {
 
 .input-wrap {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) 34px;
+  grid-template-columns: 30px 30px minmax(0, 1fr) 34px;
   align-items: center;
   min-height: 46px;
   padding: 0 5px 0 6px;
@@ -165,6 +165,7 @@ button {
 
 .icon-button,
 .mic-button,
+.project-button,
 .upload-button,
 .utility-row button,
 .file-picker,
@@ -190,6 +191,12 @@ button {
   height: 30px;
 }
 
+.project-button {
+  width: 28px;
+  height: 30px;
+  color: rgba(244, 244, 240, 0.72);
+}
+
 .upload-button {
   position: relative;
   width: 28px;
@@ -207,6 +214,7 @@ button {
 
 .icon-button:hover,
 .mic-button:hover,
+.project-button:hover,
 .upload-button:hover,
 .utility-row button:hover,
 .file-picker:hover,
@@ -216,6 +224,7 @@ button {
 
 [data-theme="light"] .icon-button:hover,
 [data-theme="light"] .mic-button:hover,
+[data-theme="light"] .project-button:hover,
 [data-theme="light"] .upload-button:hover,
 [data-theme="light"] .utility-row button:hover,
 [data-theme="light"] .file-picker:hover,
@@ -224,7 +233,8 @@ button {
 }
 
 .icon-button.active,
-.mic-button.active {
+.mic-button.active,
+.project-button.active {
   color: #78d4be;
   background: transparent;
 }
@@ -513,6 +523,140 @@ button {
   border-radius: 8px;
   background: rgba(24, 27, 26, 0.96);
   box-shadow: 0 16px 38px rgba(0, 0, 0, 0.32);
+}
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(6px);
+}
+
+.trust-dialog {
+  display: grid;
+  gap: 12px;
+  width: min(440px, 100%);
+  max-height: calc(100vh - 36px);
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  color: var(--mado-text-color, #f8f8f4);
+  background: rgba(24, 27, 26, 0.97);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.38);
+}
+
+[data-theme="light"] .trust-dialog {
+  border-color: rgba(34, 38, 34, 0.12);
+  background: rgba(255, 253, 248, 0.98);
+  box-shadow: 0 18px 42px rgba(34, 38, 34, 0.16);
+}
+
+.trust-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.trust-title h2,
+.trust-dialog p,
+.trust-details {
+  margin: 0;
+}
+
+.trust-title h2 {
+  font-size: 0.96rem;
+}
+
+.trust-dialog p,
+.trust-details {
+  font-size: 0.84rem;
+}
+
+.trust-details {
+  display: grid;
+  gap: 8px;
+}
+
+.trust-details div {
+  display: grid;
+  gap: 3px;
+}
+
+.trust-details dt {
+  color: rgba(244, 244, 240, 0.52);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.trust-details dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.76rem;
+}
+
+.trust-note {
+  color: rgba(244, 244, 240, 0.66);
+}
+
+.trust-error {
+  padding: 8px;
+  border: 1px solid rgba(255, 117, 117, 0.36);
+  border-radius: 7px;
+  color: #ffd2d2;
+  background: rgba(255, 117, 117, 0.1);
+  white-space: pre-wrap;
+}
+
+.trust-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.trust-actions button {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 7px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.trust-actions button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.trust-actions button.primary {
+  border-color: transparent;
+  color: #07231d;
+  background: #78d4be;
+}
+
+.trust-actions button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+[data-theme="light"] .trust-details dt,
+[data-theme="light"] .trust-note {
+  color: rgba(34, 38, 34, 0.58);
+}
+
+[data-theme="light"] .trust-actions button {
+  border-color: rgba(34, 38, 34, 0.14);
+}
+
+[data-theme="light"] .trust-actions button:hover {
+  background: rgba(34, 38, 34, 0.07);
 }
 
 [data-theme="light"] .settings-popover {

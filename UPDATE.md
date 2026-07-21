@@ -1,5 +1,13 @@
 # UPDATE
 
+## ver 0.3.0
+
+- 入力欄左端にプロジェクトを開くための `+` ボタンを追加。
+- フォルダ選択で開いたプロジェクトを Codex app-server の `cwd` に渡すように変更。
+- プロジェクト切り替え時に Codex thread とチャット履歴をリセットし、別プロジェクトの文脈が混ざらないように変更。
+- プロジェクトを開く際、Codex trusted project として登録するか確認するポップアップを追加。
+- Codex user config の `projects.<path>.trust_level` を読み書きする trust 設定処理を追加。
+
 ## ver 0.2.2
 
 - Tauri から `codex` が PATH 解決できない場合に備え、npm global bin の `codex.cmd` / `codex.exe` と WindowsApps の候補を直接探索するように変更。

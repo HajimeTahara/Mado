@@ -1,6 +1,8 @@
 mod codex_agent;
+mod codex_trust;
 
 use codex_agent::{ChatHistoryMessage, CodexAgentState};
+use codex_trust::CodexProjectTrustStatus;
 use serde::Serialize;
 use std::{
     env, fs,
@@ -43,11 +45,18 @@ fn ask_provider(
     provider: String,
     model: String,
     history: Option<Vec<ChatHistoryMessage>>,
+    project_path: Option<String>,
 ) -> String {
     if provider == "codex" {
-        return match state.ask(&input, &model, &history.unwrap_or_default(), |event| {
-            let _ = window.emit("codex-progress", event);
-        }) {
+        return match state.ask(
+            &input,
+            &model,
+            &history.unwrap_or_default(),
+            project_path.as_deref(),
+            |event| {
+                let _ = window.emit("codex-progress", event);
+            },
+        ) {
             Ok(answer) => answer,
             Err(error) => format!(
                 "Codex に接続できませんでした。\n\n{error}\n\nCodex CLI のインストール、ログイン状態、`codex app-server --stdio` が利用できるかを確認してください。"
@@ -71,6 +80,31 @@ fn ask_provider(
 #[tauri::command]
 fn reset_codex_conversation(state: tauri::State<'_, CodexAgentState>) {
     state.reset();
+}
+
+#[tauri::command]
+fn pick_project_folder() -> Option<String> {
+    rfd::FileDialog::new()
+        .set_title("プロジェクトを開く")
+        .pick_folder()
+        .map(|path| path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn get_codex_project_trust_status(
+    app: AppHandle,
+    root_path: String,
+) -> Result<CodexProjectTrustStatus, String> {
+    codex_trust::project_trust_status(&app, &root_path)
+}
+
+#[tauri::command]
+fn set_codex_project_trust(
+    app: AppHandle,
+    root_path: String,
+    trusted: bool,
+) -> Result<CodexProjectTrustStatus, String> {
+    codex_trust::set_project_trust(&app, &root_path, trusted)
 }
 
 #[tauri::command]
@@ -173,6 +207,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             ask_provider,
             reset_codex_conversation,
+            pick_project_folder,
+            get_codex_project_trust_status,
+            set_codex_project_trust,
             translate_text,
             capture_screenshot_translation,
             plan_file_operation

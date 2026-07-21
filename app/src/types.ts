@@ -15,6 +15,19 @@ export type CodexProgressEvent = {
   filePath?: string | null;
 };
 
+export type OpenedProject = {
+  path: string;
+  trusted: boolean;
+};
+
+export type CodexProjectTrustStatus = {
+  trusted: boolean;
+  trustLevel?: string | null;
+  projectPath: string;
+  configPath: string;
+  configExists: boolean;
+};
+
 export type AttachedFile = {
   id: string;
   name: string;

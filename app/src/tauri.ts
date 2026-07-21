@@ -1,20 +1,42 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { CodexProgressEvent, Message, OperationPreview, Provider } from "./types";
+import type { CodexProgressEvent, CodexProjectTrustStatus, Message, OperationPreview, Provider } from "./types";
 
 const isTauri = "__TAURI_INTERNALS__" in window || "__TAURI__" in window;
 
-export async function askProvider(input: string, provider: Provider, model: string, history: Message[] = []) {
+export async function askProvider(
+  input: string,
+  provider: Provider,
+  model: string,
+  history: Message[] = [],
+  projectPath?: string
+) {
   if (!isTauri) {
     return localAnswer(input, provider, model);
   }
 
   try {
-    return await invoke<string>("ask_provider", { input, provider, model, history });
+    return await invoke<string>("ask_provider", { input, provider, model, history, projectPath });
   } catch (error) {
     return `Codex への送信に失敗しました。\n\n${String(error)}`;
   }
+}
+
+export async function pickProjectFolder() {
+  if (!isTauri) {
+    return null;
+  }
+
+  return await invoke<string | null>("pick_project_folder");
+}
+
+export async function getCodexProjectTrustStatus(rootPath: string) {
+  return await invoke<CodexProjectTrustStatus>("get_codex_project_trust_status", { rootPath });
+}
+
+export async function setCodexProjectTrust(rootPath: string, trusted: boolean) {
+  return await invoke<CodexProjectTrustStatus>("set_codex_project_trust", { rootPath, trusted });
 }
 
 export async function resetCodexConversation() {
