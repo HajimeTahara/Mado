@@ -3,11 +3,9 @@ import {
   FileText,
   FolderOpen,
   Loader2,
-  MessageSquarePlus,
   Mic,
   Moon,
   Plus,
-  Send,
   Settings,
   ShieldCheck,
   Sun,
@@ -372,12 +370,6 @@ function App() {
             </div>
           </div>
           <div className="panel-actions" aria-label="操作">
-            <button className="icon-button send-icon" type="submit" disabled={!input.trim() || isBusy} title="送信">
-              <Send size={22} />
-            </button>
-            <button className="icon-button" type="button" onClick={handleNewChat} title="新規チャット Ctrl+Shift+N">
-              <MessageSquarePlus size={21} />
-            </button>
             <button
               ref={settingsButtonRef}
               className={`icon-button ${isSettingsOpen ? "active" : ""}`}
