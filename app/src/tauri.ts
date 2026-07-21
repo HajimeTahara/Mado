@@ -1,18 +1,30 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { OperationPreview, Provider } from "./types";
+import type { Message, OperationPreview, Provider } from "./types";
 
 const isTauri = "__TAURI_INTERNALS__" in window || "__TAURI__" in window;
 
-export async function askProvider(input: string, provider: Provider, model: string) {
+export async function askProvider(input: string, provider: Provider, model: string, history: Message[] = []) {
   if (!isTauri) {
     return localAnswer(input, provider, model);
   }
 
   try {
-    return await invoke<string>("ask_provider", { input, provider, model });
+    return await invoke<string>("ask_provider", { input, provider, model, history });
+  } catch (error) {
+    return `Codex への送信に失敗しました。\n\n${String(error)}`;
+  }
+}
+
+export async function resetCodexConversation() {
+  if (!isTauri) {
+    return;
+  }
+
+  try {
+    await invoke("reset_codex_conversation");
   } catch {
-    return localAnswer(input, provider, model);
+    // Reset is best-effort; a failed reset should not block starting a new local UI thread.
   }
 }
 

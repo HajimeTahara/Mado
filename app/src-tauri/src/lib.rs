@@ -1,3 +1,6 @@
+mod codex_agent;
+
+use codex_agent::{ChatHistoryMessage, CodexAgentState};
 use serde::Serialize;
 use std::{
     env, fs,
@@ -33,7 +36,22 @@ struct OperationPreview {
 }
 
 #[tauri::command]
-fn ask_provider(input: String, provider: String, model: String) -> String {
+fn ask_provider(
+    state: tauri::State<'_, CodexAgentState>,
+    input: String,
+    provider: String,
+    model: String,
+    history: Option<Vec<ChatHistoryMessage>>,
+) -> String {
+    if provider == "codex" {
+        return match state.ask(&input, &model, &history.unwrap_or_default()) {
+            Ok(answer) => answer,
+            Err(error) => format!(
+                "Codex に接続できませんでした。\n\n{error}\n\nCodex CLI のインストール、ログイン状態、`codex app-server --stdio` が利用できるかを確認してください。"
+            ),
+        };
+    }
+
     if looks_like_translation(&input) {
         return translate_text(input);
     }
@@ -45,6 +63,11 @@ fn ask_provider(input: String, provider: String, model: String) -> String {
     format!(
         "Mado MVP は {provider} / {model} の設定で受け取りました。\n\n実プロバイダー接続前のローカル応答モードです。短い質問とファイル操作プレビューの流れを確認できます。"
     )
+}
+
+#[tauri::command]
+fn reset_codex_conversation(state: tauri::State<'_, CodexAgentState>) {
+    state.reset();
 }
 
 #[tauri::command]
@@ -104,6 +127,7 @@ fn plan_file_operation(instruction: String) -> OperationPreview {
 
 pub fn run() {
     tauri::Builder::default()
+        .manage(CodexAgentState::new())
         .on_window_event(|window, event| match event {
             WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
@@ -145,6 +169,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             ask_provider,
+            reset_codex_conversation,
             translate_text,
             capture_screenshot_translation,
             plan_file_operation

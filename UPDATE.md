@@ -1,5 +1,12 @@
 # UPDATE
 
+## ver 0.2.0
+
+- Codex CLI の `app-server --stdio` を利用した Codex agent 会話機能を追加。
+- 設定プロバイダーに Codex を追加し、新規環境の既定プロバイダーを Codex に変更。
+- Mado の会話履歴を Codex へのプロンプト文脈として渡し、新規チャット時に Codex thread をリセットするように変更。
+- Codex CLI 未インストール、未ログイン、app-server 起動失敗時にチャット内へ理由を表示するように変更。
+
 ## ver 0.1.13
 
 - 設定に入力欄と会話履歴テキストボックスの透過切り替えを追加。

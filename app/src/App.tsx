@@ -16,13 +16,14 @@ import {
   askProvider,
   onWindowFocusChanged,
   planFileOperation,
+  resetCodexConversation,
   startWindowDrag
 } from "./tauri";
 
 const defaultSettings: ProviderSettings = {
-  provider: "openai",
-  model: "gpt-4.1-mini",
-  endpoint: "https://api.openai.com/v1",
+  provider: "codex",
+  model: "gpt-5",
+  endpoint: "codex app-server --stdio",
   alwaysOnTop: false,
   translucent: true,
   backgroundMode: "transparent",
@@ -33,6 +34,7 @@ const defaultSettings: ProviderSettings = {
 };
 
 const providerDefaults: Record<Provider, { model: string; endpoint: string }> = {
+  codex: { model: "gpt-5", endpoint: "codex app-server --stdio" },
   openai: { model: "gpt-4.1-mini", endpoint: "https://api.openai.com/v1" },
   anthropic: { model: "claude-3-5-haiku-latest", endpoint: "https://api.anthropic.com" },
   openrouter: { model: "openai/gpt-4.1-mini", endpoint: "https://openrouter.ai/api/v1" },
@@ -143,14 +145,15 @@ function App() {
     setInput("");
     setIsBusy(true);
     const userMessage = makeMessage("user", text);
-    setMessages((current) => [...current, userMessage]);
+    const nextMessages = [...messages, userMessage];
+    setMessages(nextMessages);
 
     if (looksLikeFileOperation(text)) {
       const operation = await planFileOperation(text);
       setPreview(operation);
     }
 
-    const answer = await askProvider(text, settings.provider, settings.model);
+    const answer = await askProvider(text, settings.provider, settings.model, messages);
     setMessages((current) => [...current, makeMessage("assistant", answer)]);
     setIsBusy(false);
   }
@@ -175,6 +178,7 @@ function App() {
     setFiles([]);
     setPreview(null);
     setIsSettingsOpen(false);
+    void resetCodexConversation();
   }
 
   return (
@@ -351,6 +355,7 @@ function SettingsPanel({
           <label className="field">
             <span>サービス</span>
             <select value={settings.provider} onChange={(event) => updateProvider(event.target.value as Provider)}>
+              <option value="codex">Codex</option>
               <option value="openai">OpenAI</option>
               <option value="anthropic">Anthropic</option>
               <option value="openrouter">OpenRouter</option>
@@ -375,7 +380,11 @@ function SettingsPanel({
           </label>
         </div>
 
-        <p className="settings-note">API キー保存と実プロバイダー接続は次の段階で OS の認証情報ストアに接続します。</p>
+        <p className="settings-note">
+          {settings.provider === "codex"
+            ? "Codex はローカルの Codex CLI とログイン状態を使用します。"
+            : "API キー保存と実プロバイダー接続は次の段階で OS の認証情報ストアに接続します。"}
+        </p>
       </section>
 
       <section className="settings-category" aria-labelledby="display-settings-title">

@@ -1,4 +1,4 @@
-export type Provider = "openai" | "anthropic" | "openrouter" | "ollama";
+export type Provider = "codex" | "openai" | "anthropic" | "openrouter" | "ollama";
 
 export type Message = {
   id: string;
