@@ -28,6 +28,8 @@ import {
   getCodexProjectTrustStatus,
   onCodexProgress,
   onWindowFocusChanged,
+  openCodexUserAgents,
+  openCodexUserConfig,
   pickProjectFolder,
   planFileOperation,
   resetCodexConversation,
@@ -320,51 +322,54 @@ function App() {
             void handleSend();
           }}
         >
-          <div className="input-wrap">
-            <button
-              className={`project-button ${openedProject ? "active" : ""}`}
-              type="button"
-              onClick={() => void handleOpenProject()}
-              disabled={isBusy}
-              title={openedProject ? `プロジェクト: ${openedProject.path}` : "プロジェクトを開く"}
-              aria-label="プロジェクトを開く"
-            >
-              <Plus size={16} />
-            </button>
-            <label className="upload-button" title="ファイルアップロード">
-              <Upload size={16} />
-              <input
-                type="file"
-                multiple
-                accept=".txt,.md,.pdf,.docx,.html"
-                onChange={(event) => {
-                  if (event.target.files) {
-                    void handleFiles(event.target.files);
+          <div className="prompt-main">
+            {openedProject && <ProjectBadge project={openedProject} />}
+            <div className="input-wrap">
+              <button
+                className={`project-button ${openedProject ? "active" : ""}`}
+                type="button"
+                onClick={() => void handleOpenProject()}
+                disabled={isBusy}
+                title={openedProject ? `プロジェクト: ${openedProject.path}` : "プロジェクトを開く"}
+                aria-label="プロジェクトを開く"
+              >
+                <Plus size={16} />
+              </button>
+              <label className="upload-button" title="ファイルアップロード">
+                <Upload size={16} />
+                <input
+                  type="file"
+                  multiple
+                  accept=".txt,.md,.pdf,.docx,.html"
+                  onChange={(event) => {
+                    if (event.target.files) {
+                      void handleFiles(event.target.files);
+                    }
+                  }}
+                />
+              </label>
+              <textarea
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                placeholder="Welcome to Mado!"
+                rows={1}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                    event.preventDefault();
+                    void handleSend();
                   }
                 }}
               />
-            </label>
-            <textarea
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              placeholder="Welcome to Mado!"
-              rows={1}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-                  event.preventDefault();
-                  void handleSend();
-                }
-              }}
-            />
-            <button
-              className={`mic-button ${isVoiceMode ? "active" : ""}`}
-              type="button"
-              onClick={() => setIsVoiceMode((current) => !current)}
-              title="音声入力に切り替え"
-              aria-pressed={isVoiceMode}
-            >
-              <Mic size={17} />
-            </button>
+              <button
+                className={`mic-button ${isVoiceMode ? "active" : ""}`}
+                type="button"
+                onClick={() => setIsVoiceMode((current) => !current)}
+                title="音声入力に切り替え"
+                aria-pressed={isVoiceMode}
+              >
+                <Mic size={17} />
+              </button>
+            </div>
           </div>
           <div className="panel-actions" aria-label="操作">
             <button className="icon-button send-icon" type="submit" disabled={!input.trim() || isBusy} title="送信">
@@ -451,6 +456,15 @@ function TrustProjectDialog({
   );
 }
 
+function ProjectBadge({ project }: { project: OpenedProject }) {
+  return (
+    <div className={`project-badge ${project.trusted ? "trusted" : "untrusted"}`} title={project.path}>
+      <FolderOpen size={17} />
+      <span>{project.path}</span>
+    </div>
+  );
+}
+
 function CodexProgress({ events }: { events: CodexProgressEvent[] }) {
   return (
     <article className="codex-progress" aria-label="Codex の処理状況">
@@ -532,6 +546,18 @@ function SettingsPanel({
   setSettings: React.Dispatch<React.SetStateAction<ProviderSettings>>;
   updateProvider: (provider: Provider) => void;
 }) {
+  const [fileOpenStatus, setFileOpenStatus] = useState("");
+
+  async function openCodexFile(kind: "config" | "agents") {
+    setFileOpenStatus("開いています...");
+    try {
+      const path = kind === "config" ? await openCodexUserConfig() : await openCodexUserAgents();
+      setFileOpenStatus(`開きました: ${path}`);
+    } catch (error) {
+      setFileOpenStatus(`開けませんでした: ${String(error)}`);
+    }
+  }
+
   return (
     <div className="panel-section">
       <div className="panel-title">
@@ -573,6 +599,23 @@ function SettingsPanel({
             ? "Codex はローカルの Codex CLI とログイン状態を使用します。"
             : "API キー保存と実プロバイダー接続は次の段階で OS の認証情報ストアに接続します。"}
         </p>
+      </section>
+
+      <section className="settings-category" aria-labelledby="codex-file-settings-title">
+        <h3 id="codex-file-settings-title">Codex ファイル</h3>
+
+        <div className="setting-group">
+          <h4>デフォルト設定</h4>
+          <div className="settings-action-grid">
+            <button type="button" onClick={() => void openCodexFile("config")}>
+              config.toml
+            </button>
+            <button type="button" onClick={() => void openCodexFile("agents")}>
+              AGENTS.md
+            </button>
+          </div>
+          {fileOpenStatus && <p className="settings-note file-open-status">{fileOpenStatus}</p>}
+        </div>
       </section>
 
       <section className="settings-category" aria-labelledby="display-settings-title">

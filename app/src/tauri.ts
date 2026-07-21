@@ -39,6 +39,14 @@ export async function setCodexProjectTrust(rootPath: string, trusted: boolean) {
   return await invoke<CodexProjectTrustStatus>("set_codex_project_trust", { rootPath, trusted });
 }
 
+export async function openCodexUserConfig() {
+  return await invoke<string>("open_codex_user_config");
+}
+
+export async function openCodexUserAgents() {
+  return await invoke<string>("open_codex_user_agents");
+}
+
 export async function resetCodexConversation() {
   if (!isTauri) {
     return;

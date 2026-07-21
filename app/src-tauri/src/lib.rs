@@ -7,6 +7,7 @@ use serde::Serialize;
 use std::{
     env, fs,
     path::{Path, PathBuf},
+    process::{Command, Stdio},
     time::SystemTime,
 };
 use tauri::{
@@ -105,6 +106,24 @@ fn set_codex_project_trust(
     trusted: bool,
 ) -> Result<CodexProjectTrustStatus, String> {
     codex_trust::set_project_trust(&app, &root_path, trusted)
+}
+
+#[tauri::command]
+fn open_codex_user_config(app: AppHandle) -> Result<String, String> {
+    open_codex_user_file(
+        &app,
+        "config.toml",
+        "# Codex user config\n\n# Example:\n# model = \"gpt-5\"\n",
+    )
+}
+
+#[tauri::command]
+fn open_codex_user_agents(app: AppHandle) -> Result<String, String> {
+    open_codex_user_file(
+        &app,
+        "AGENTS.md",
+        "# AGENTS.md\n\nこのファイルに Codex のデフォルト指示を書けます。\n",
+    )
 }
 
 #[tauri::command]
@@ -210,6 +229,8 @@ pub fn run() {
             pick_project_folder,
             get_codex_project_trust_status,
             set_codex_project_trust,
+            open_codex_user_config,
+            open_codex_user_agents,
             translate_text,
             capture_screenshot_translation,
             plan_file_operation
@@ -298,6 +319,73 @@ fn toggle_window(window: &WebviewWindow) {
             let _ = window.set_focus();
         }
     }
+}
+
+fn open_codex_user_file(
+    app: &AppHandle,
+    file_name: &str,
+    default_content: &str,
+) -> Result<String, String> {
+    let home = app
+        .path()
+        .home_dir()
+        .map_err(|error| format!("ユーザーホームフォルダの取得に失敗しました: {error}"))?;
+    let codex_dir = home.join(".codex");
+    fs::create_dir_all(&codex_dir).map_err(|error| {
+        format!(
+            "Codex 設定フォルダを作成できませんでした ({}): {error}",
+            codex_dir.display()
+        )
+    })?;
+
+    let path = codex_dir.join(file_name);
+    if !path.exists() {
+        fs::write(&path, default_content).map_err(|error| {
+            format!(
+                "Codex 設定ファイルを作成できませんでした ({}): {error}",
+                path.display()
+            )
+        })?;
+    }
+
+    open_path_with_default_app(&path)?;
+    Ok(path.to_string_lossy().to_string())
+}
+
+fn open_path_with_default_app(path: &Path) -> Result<(), String> {
+    let mut command = if cfg!(windows) {
+        let mut command = Command::new("cmd");
+        let path_text = path.to_string_lossy().to_string();
+        command.args(["/C", "start", "", &path_text]);
+        command
+    } else if cfg!(target_os = "macos") {
+        let mut command = Command::new("open");
+        command.arg(path);
+        command
+    } else {
+        let mut command = Command::new("xdg-open");
+        command.arg(path);
+        command
+    };
+
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000);
+    }
+
+    command.spawn().map_err(|error| {
+        format!(
+            "既定のアプリで開けませんでした ({}): {error}",
+            path.display()
+        )
+    })?;
+    Ok(())
 }
 
 fn looks_like_translation(value: &str) -> bool {
