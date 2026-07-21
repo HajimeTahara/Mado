@@ -7,7 +7,7 @@ use std::{
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager, WebviewWindow, WindowEvent,
+    AppHandle, Manager, PhysicalSize, WebviewWindow, WindowEvent,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
@@ -73,7 +73,8 @@ fn plan_file_operation(instruction: String) -> OperationPreview {
     let files = scan_files(&source, &extensions);
 
     let mut warnings = vec![
-        "これはプレビューです。ファイルの移動、コピー、リネーム、削除はまだ実行しません。".to_string(),
+        "これはプレビューです。ファイルの移動、コピー、リネーム、削除はまだ実行しません。"
+            .to_string(),
     ];
 
     if action == "delete" {
@@ -81,11 +82,17 @@ fn plan_file_operation(instruction: String) -> OperationPreview {
     }
 
     if files.is_empty() {
-        warnings.push("条件に合うファイルが見つからないか、対象フォルダを読めませんでした。".to_string());
+        warnings.push(
+            "条件に合うファイルが見つからないか、対象フォルダを読めませんでした。".to_string(),
+        );
     }
 
     OperationPreview {
-        summary: format!("{} 件の候補を見つけました。操作: {}", files.len(), action_label(action)),
+        summary: format!(
+            "{} 件の候補を見つけました。操作: {}",
+            files.len(),
+            action_label(action)
+        ),
         source: source.display().to_string(),
         destination: destination.map(|path| path.display().to_string()),
         action: action.to_string(),
@@ -97,11 +104,18 @@ fn plan_file_operation(instruction: String) -> OperationPreview {
 
 pub fn run() {
     tauri::Builder::default()
-        .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
+        .on_window_event(|window, event| match event {
+            WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
                 let _ = window.hide();
             }
+            WindowEvent::Moved(_) | WindowEvent::ScaleFactorChanged { .. } => {
+                if let Some(webview_window) = window.app_handle().get_webview_window(window.label())
+                {
+                    let _ = update_window_max_size(&webview_window);
+                }
+            }
+            _ => {}
         })
         .setup(|app| {
             configure_desktop_panel(app.handle())?;
@@ -113,7 +127,9 @@ pub fn run() {
             app.handle().plugin(
                 tauri_plugin_global_shortcut::Builder::new()
                     .with_handler(move |app, shortcut, event| {
-                        if shortcut == &shortcut_for_handler && event.state() == ShortcutState::Pressed {
+                        if shortcut == &shortcut_for_handler
+                            && event.state() == ShortcutState::Pressed
+                        {
                             if let Some(window) = app.get_webview_window("main") {
                                 toggle_window(&window);
                             }
@@ -142,6 +158,21 @@ fn configure_desktop_panel(app: &AppHandle) -> tauri::Result<()> {
         let _ = window.set_decorations(false);
         let _ = window.set_shadow(false);
         let _ = window.set_skip_taskbar(true);
+        update_window_max_size(&window)?;
+    }
+
+    Ok(())
+}
+
+fn update_window_max_size(window: &WebviewWindow) -> tauri::Result<()> {
+    let monitor = match window.current_monitor()? {
+        Some(monitor) => Some(monitor),
+        None => window.primary_monitor()?,
+    };
+
+    if let Some(monitor) = monitor {
+        let max_size = monitor.work_area().size;
+        window.set_max_size(Some(PhysicalSize::new(max_size.width, max_size.height)))?;
     }
 
     Ok(())
@@ -194,6 +225,7 @@ fn toggle_window(window: &WebviewWindow) {
             let _ = window.hide();
         }
         _ => {
+            let _ = update_window_max_size(window);
             let _ = window.show();
             let _ = window.set_focus();
         }
@@ -202,23 +234,44 @@ fn toggle_window(window: &WebviewWindow) {
 
 fn looks_like_translation(value: &str) -> bool {
     let lower = value.to_lowercase();
-    lower.contains("translate") || lower.contains("翻訳") || lower.contains("和訳") || lower.contains("日本語")
+    lower.contains("translate")
+        || lower.contains("翻訳")
+        || lower.contains("和訳")
+        || lower.contains("日本語")
 }
 
 fn looks_like_file_operation(value: &str) -> bool {
     let lower = value.to_lowercase();
-    ["move", "copy", "rename", "delete", "list", "移動", "コピー", "リネーム", "削除", "一覧", "ファイル", "フォルダ"]
-        .iter()
-        .any(|needle| lower.contains(needle))
+    [
+        "move",
+        "copy",
+        "rename",
+        "delete",
+        "list",
+        "移動",
+        "コピー",
+        "リネーム",
+        "削除",
+        "一覧",
+        "ファイル",
+        "フォルダ",
+    ]
+    .iter()
+    .any(|needle| lower.contains(needle))
 }
 
 fn infer_action(instruction: &str) -> &'static str {
     let lower = instruction.to_lowercase();
-    if lower.contains("delete") || lower.contains("remove") || lower.contains("削除") || lower.contains("消して") {
+    if lower.contains("delete")
+        || lower.contains("remove")
+        || lower.contains("削除")
+        || lower.contains("消して")
+    {
         "delete"
     } else if lower.contains("copy") || lower.contains("コピー") {
         "copy"
-    } else if lower.contains("rename") || lower.contains("リネーム") || lower.contains("名前") {
+    } else if lower.contains("rename") || lower.contains("リネーム") || lower.contains("名前")
+    {
         "rename"
     } else if lower.contains("move") || lower.contains("移動") {
         "move"
@@ -243,7 +296,10 @@ fn infer_source(instruction: &str) -> PathBuf {
 
     if lower.contains("download") || lower.contains("ダウンロード") {
         home.join("Downloads")
-    } else if lower.contains("document") || lower.contains("documents") || lower.contains("ドキュメント") {
+    } else if lower.contains("document")
+        || lower.contains("documents")
+        || lower.contains("ドキュメント")
+    {
         home.join("Documents")
     } else if lower.contains("desktop") || lower.contains("デスクトップ") {
         home.join("Desktop")
@@ -256,11 +312,16 @@ fn infer_destination(instruction: &str) -> Option<PathBuf> {
     let lower = instruction.to_lowercase();
     let home = home_dir();
 
-    if !(lower.contains("move") || lower.contains("copy") || lower.contains("移動") || lower.contains("コピー")) {
+    if !(lower.contains("move")
+        || lower.contains("copy")
+        || lower.contains("移動")
+        || lower.contains("コピー"))
+    {
         return None;
     }
 
-    if lower.contains("document") || lower.contains("documents") || lower.contains("ドキュメント") {
+    if lower.contains("document") || lower.contains("documents") || lower.contains("ドキュメント")
+    {
         Some(home.join("Documents"))
     } else if lower.contains("desktop") || lower.contains("デスクトップ") {
         Some(home.join("Desktop"))
