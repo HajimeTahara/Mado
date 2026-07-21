@@ -1,5 +1,11 @@
 # UPDATE
 
+## ver 0.2.2
+
+- Tauri から `codex` が PATH 解決できない場合に備え、npm global bin の `codex.cmd` / `codex.exe` と WindowsApps の候補を直接探索するように変更。
+- `MADO_CODEX_BIN` 環境変数で Codex CLI の実行ファイルを明示指定できるように変更。
+- Codex CLI 起動失敗時に、試行したコマンドをエラー文へ含めるように変更。
+
 ## ver 0.2.1
 
 - 新規チャット作成時の Mado 定型 welcome メッセージ表示を廃止。

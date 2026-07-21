@@ -2,7 +2,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     collections::VecDeque,
+    env,
     io::{BufRead, BufReader, Write},
+    path::{Path, PathBuf},
     process::{Child, ChildStdin, Command, Stdio},
     sync::{mpsc, Mutex},
     thread,
@@ -127,7 +129,9 @@ struct CodexAppServerClient {
 
 impl CodexAppServerClient {
     fn start(executable: &str) -> Result<Self, String> {
-        let mut command = Command::new(executable);
+        let command_spec = resolve_codex_command(executable);
+        let mut command = Command::new(&command_spec.program);
+        command.args(&command_spec.prefix_args);
         command
             .args(["app-server", "--stdio"])
             .stdin(Stdio::piped())
@@ -139,9 +143,12 @@ impl CodexAppServerClient {
             command.creation_flags(0x08000000);
         }
 
-        let mut child = command
-            .spawn()
-            .map_err(|error| format!("Codex CLI を起動できませんでした: {error}"))?;
+        let mut child = command.spawn().map_err(|error| {
+            format!(
+                "Codex CLI を起動できませんでした: {error}\n試行コマンド: {}",
+                command_spec.display
+            )
+        })?;
         let stdin = child
             .stdin
             .take()
@@ -338,6 +345,110 @@ impl CodexAppServerClient {
             .and_then(|_| self.stdin.flush())
             .map_err(|error| format!("Codex app-server への送信に失敗しました: {error}"))
     }
+}
+
+struct CodexCommandSpec {
+    program: String,
+    prefix_args: Vec<String>,
+    display: String,
+}
+
+fn resolve_codex_command(executable: &str) -> CodexCommandSpec {
+    let requested = env::var("MADO_CODEX_BIN")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| executable.to_string());
+
+    for candidate in codex_command_candidates(&requested) {
+        if candidate.is_file() {
+            return command_spec_for_path(candidate);
+        }
+    }
+
+    CodexCommandSpec {
+        program: requested.clone(),
+        prefix_args: Vec::new(),
+        display: requested,
+    }
+}
+
+fn codex_command_candidates(requested: &str) -> Vec<PathBuf> {
+    let requested_path = PathBuf::from(requested);
+    if requested_path.is_absolute() || requested.contains('\\') || requested.contains('/') {
+        return vec![requested_path];
+    }
+
+    let mut candidates = Vec::new();
+    if cfg!(windows) {
+        let names = [
+            format!("{requested}.cmd"),
+            format!("{requested}.exe"),
+            requested.to_string(),
+        ];
+        for dir in windows_codex_search_dirs() {
+            for name in &names {
+                candidates.push(dir.join(name));
+            }
+        }
+    }
+
+    candidates.push(PathBuf::from(requested));
+    candidates
+}
+
+#[cfg(windows)]
+fn windows_codex_search_dirs() -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    if let Some(app_data) = env::var_os("APPDATA").map(PathBuf::from) {
+        dirs.push(app_data.join("npm"));
+    }
+    if let Some(user_profile) = env::var_os("USERPROFILE").map(PathBuf::from) {
+        dirs.push(user_profile.join("AppData").join("Roaming").join("npm"));
+        dirs.push(
+            user_profile
+                .join("AppData")
+                .join("Local")
+                .join("Microsoft")
+                .join("WindowsApps"),
+        );
+    }
+    if let Some(local_app_data) = env::var_os("LOCALAPPDATA").map(PathBuf::from) {
+        dirs.push(local_app_data.join("Microsoft").join("WindowsApps"));
+    }
+    dirs
+}
+
+#[cfg(not(windows))]
+fn windows_codex_search_dirs() -> Vec<PathBuf> {
+    Vec::new()
+}
+
+fn command_spec_for_path(path: PathBuf) -> CodexCommandSpec {
+    if is_windows_command_script(&path) {
+        let shell = env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
+        let path_text = path.display().to_string();
+        return CodexCommandSpec {
+            program: shell,
+            prefix_args: vec!["/C".to_string(), path_text.clone()],
+            display: format!("{path_text} app-server --stdio"),
+        };
+    }
+
+    let path_text = path.display().to_string();
+    CodexCommandSpec {
+        program: path_text.clone(),
+        prefix_args: Vec::new(),
+        display: format!("{path_text} app-server --stdio"),
+    }
+}
+
+fn is_windows_command_script(path: &Path) -> bool {
+    cfg!(windows)
+        && path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .map(|extension| matches!(extension.to_ascii_lowercase().as_str(), "cmd" | "bat"))
+            .unwrap_or(false)
 }
 
 fn status_event(event_type: &str, message: &str) -> CodexProgressEvent {
