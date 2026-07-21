@@ -7,7 +7,7 @@ use std::{
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager, PhysicalSize, WebviewWindow, WindowEvent,
+    AppHandle, LogicalSize, Manager, WebviewWindow, WindowEvent,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
@@ -172,7 +172,10 @@ fn update_window_max_size(window: &WebviewWindow) -> tauri::Result<()> {
 
     if let Some(monitor) = monitor {
         let max_size = monitor.work_area().size;
-        window.set_max_size(Some(PhysicalSize::new(max_size.width, max_size.height)))?;
+        let scale_factor = monitor.scale_factor();
+        let max_width = f64::from(max_size.width) / scale_factor;
+        let max_height = f64::from(max_size.height) / scale_factor;
+        window.set_max_size(Some(LogicalSize::new(max_width, max_height)))?;
     }
 
     Ok(())

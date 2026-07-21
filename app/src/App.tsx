@@ -36,6 +36,8 @@ const providerDefaults: Record<Provider, { model: string; endpoint: string }> = 
   ollama: { model: "llama3.2", endpoint: "http://localhost:11434" }
 };
 
+const maxStoredMessages = 200;
+
 const welcome: Message = {
   id: "welcome",
   role: "assistant",
@@ -53,7 +55,7 @@ function App() {
   const [isBusy, setIsBusy] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isVoiceMode, setIsVoiceMode] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const messageListRef = useRef<HTMLDivElement>(null);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const settingsPopoverRef = useRef<HTMLElement>(null);
 
@@ -65,9 +67,19 @@ function App() {
   }, [settings]);
 
   useEffect(() => {
-    localStorage.setItem("mado-history", JSON.stringify(messages.slice(-18)));
-    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+    localStorage.setItem("mado-history", JSON.stringify(messages.slice(-maxStoredMessages)));
   }, [messages]);
+
+  useEffect(() => {
+    const list = messageListRef.current;
+    if (!list) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      list.scrollTop = list.scrollHeight;
+    });
+  }, [files.length, isBusy, messages, preview]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -176,21 +188,22 @@ function App() {
           }}
         />
         <section className="conversation-board" aria-label="会話">
-          <div className="message-list">
-            {messages.map((message) => (
-              <article className={`message ${message.role}`} key={message.id}>
-                <p>{message.content}</p>
-              </article>
-            ))}
-            {preview && <OperationPreviewCard preview={preview} />}
-            {files.length > 0 && <FileSummary files={files} />}
-            {isBusy && (
-              <article className="message assistant status">
-                <Loader2 className="spin" size={15} />
-                <p>考えています...</p>
-              </article>
-            )}
-            <div ref={scrollRef} />
+          <div className="message-list" ref={messageListRef}>
+            <div className="message-stack">
+              {messages.map((message) => (
+                <article className={`message ${message.role}`} key={message.id}>
+                  <p>{message.content}</p>
+                </article>
+              ))}
+              {preview && <OperationPreviewCard preview={preview} />}
+              {files.length > 0 && <FileSummary files={files} />}
+              {isBusy && (
+                <article className="message assistant status">
+                  <Loader2 className="spin" size={15} />
+                  <p>考えています...</p>
+                </article>
+              )}
+            </div>
           </div>
         </section>
 
