@@ -11,9 +11,10 @@ import {
   Sun,
   Upload
 } from "lucide-react";
-import type { AttachedFile, Message, OperationPreview, Provider, ProviderSettings } from "./types";
+import type { AttachedFile, CodexProgressEvent, Message, OperationPreview, Provider, ProviderSettings } from "./types";
 import {
   askProvider,
+  onCodexProgress,
   onWindowFocusChanged,
   planFileOperation,
   resetCodexConversation,
@@ -43,20 +44,13 @@ const providerDefaults: Record<Provider, { model: string; endpoint: string }> = 
 
 const maxStoredMessages = 200;
 
-const welcome: Message = {
-  id: "welcome",
-  role: "assistant",
-  content:
-    "こんにちは、Mado です。短い質問やファイル操作のプレビューをここで扱えます。危ない操作は必ず確認してから進めます。",
-  createdAt: new Date().toISOString()
-};
-
 function App() {
   const [settings, setSettings] = useState<ProviderSettings>(() => readSettings());
-  const [messages, setMessages] = useState<Message[]>(() => readStorage("mado-history", [welcome]));
+  const [messages, setMessages] = useState<Message[]>(() => readMessages());
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<AttachedFile[]>([]);
   const [preview, setPreview] = useState<OperationPreview | null>(null);
+  const [progressEvents, setProgressEvents] = useState<CodexProgressEvent[]>([]);
   const [isBusy, setIsBusy] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isVoiceMode, setIsVoiceMode] = useState(false);
@@ -136,6 +130,18 @@ function App() {
     return () => unlisten();
   }, []);
 
+  useEffect(() => {
+    let unlisten = () => {};
+
+    void onCodexProgress((event) => {
+      setProgressEvents((current) => [...current, event].slice(-24));
+    }).then((cleanup) => {
+      unlisten = cleanup;
+    });
+
+    return () => unlisten();
+  }, []);
+
   async function handleSend() {
     const text = input.trim();
     if (!text || isBusy) {
@@ -144,6 +150,7 @@ function App() {
 
     setInput("");
     setIsBusy(true);
+    setProgressEvents([]);
     const userMessage = makeMessage("user", text);
     const nextMessages = [...messages, userMessage];
     setMessages(nextMessages);
@@ -153,9 +160,12 @@ function App() {
       setPreview(operation);
     }
 
-    const answer = await askProvider(text, settings.provider, settings.model, messages);
-    setMessages((current) => [...current, makeMessage("assistant", answer)]);
-    setIsBusy(false);
+    try {
+      const answer = await askProvider(text, settings.provider, settings.model, messages);
+      setMessages((current) => [...current, makeMessage("assistant", answer)]);
+    } finally {
+      setIsBusy(false);
+    }
   }
 
   async function handleFiles(incoming: FileList | File[]) {
@@ -173,10 +183,11 @@ function App() {
   }
 
   function handleNewChat() {
-    setMessages([welcome]);
+    setMessages([]);
     setInput("");
     setFiles([]);
     setPreview(null);
+    setProgressEvents([]);
     setIsSettingsOpen(false);
     void resetCodexConversation();
   }
@@ -211,6 +222,7 @@ function App() {
               ))}
               {preview && <OperationPreviewCard preview={preview} />}
               {files.length > 0 && <FileSummary files={files} />}
+              {isBusy && progressEvents.length > 0 && <CodexProgress events={progressEvents} />}
               {isBusy && (
                 <article className="message assistant status">
                   <Loader2 className="spin" size={15} />
@@ -294,6 +306,41 @@ function App() {
   );
 }
 
+function CodexProgress({ events }: { events: CodexProgressEvent[] }) {
+  return (
+    <article className="codex-progress" aria-label="Codex の処理状況">
+      <div className="progress-heading">
+        <Loader2 className="spin" size={15} />
+        <strong>Codex 実行中</strong>
+      </div>
+      <div className="progress-list">
+        {events.slice(-8).map((event, index) => (
+          <div className={`progress-row ${event.kind}`} key={`${event.eventType}-${index}-${event.message}`}>
+            <span className="progress-dot" />
+            <div>
+              <span className="progress-kind">{progressKindLabel(event.kind)}</span>
+              <p>{event.command || event.filePath || event.message}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function progressKindLabel(kind: CodexProgressEvent["kind"]) {
+  switch (kind) {
+    case "command":
+      return "Command";
+    case "fileChange":
+      return "File";
+    case "reasoning":
+      return "Reasoning";
+    default:
+      return "Status";
+  }
+}
+
 function OperationPreviewCard({ preview }: { preview: OperationPreview }) {
   return (
     <article className={`operation-preview ${preview.action === "delete" ? "danger" : ""}`}>
@@ -356,10 +403,6 @@ function SettingsPanel({
             <span>サービス</span>
             <select value={settings.provider} onChange={(event) => updateProvider(event.target.value as Provider)}>
               <option value="codex">Codex</option>
-              <option value="openai">OpenAI</option>
-              <option value="anthropic">Anthropic</option>
-              <option value="openrouter">OpenRouter</option>
-              <option value="ollama">Ollama</option>
             </select>
           </label>
 
@@ -526,6 +569,10 @@ function SettingsPanel({
   );
 }
 
+function readMessages(): Message[] {
+  return readStorage<Message[]>("mado-history", []).filter((message) => message.id !== "welcome");
+}
+
 function readStorage<T>(key: string, fallback: T): T {
   try {
     const stored = localStorage.getItem(key);
@@ -536,10 +583,21 @@ function readStorage<T>(key: string, fallback: T): T {
 }
 
 function readSettings(): ProviderSettings {
-  return {
+  const settings = {
     ...defaultSettings,
     ...readStorage<Partial<ProviderSettings>>("mado-settings", {})
   };
+
+  if (settings.provider !== "codex") {
+    return {
+      ...settings,
+      provider: "codex",
+      model: providerDefaults.codex.model,
+      endpoint: providerDefaults.codex.endpoint
+    };
+  }
+
+  return settings;
 }
 
 function defaultTextColor(theme: ProviderSettings["theme"]) {

@@ -1,5 +1,13 @@
 # UPDATE
 
+## ver 0.2.1
+
+- 新規チャット作成時の Mado 定型 welcome メッセージ表示を廃止。
+- 保存済み履歴に残っている旧 welcome メッセージを読み込み時に除外するように変更。
+- 旧設定で OpenAI などが保存されていても、起動時に Codex プロバイダーへ移行するように変更。
+- 設定のプロバイダー選択を現段階で対応している Codex のみに整理。
+- Codex 応答中の command / file change / reasoning / status イベントをチャット内に表示する進捗パネルを追加。
+
 ## ver 0.2.0
 
 - Codex CLI の `app-server --stdio` を利用した Codex agent 会話機能を追加。

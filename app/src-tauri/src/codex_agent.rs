@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     collections::VecDeque,
@@ -21,6 +21,16 @@ pub struct CodexAgentState {
     conversation: Mutex<CodexConversation>,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexProgressEvent {
+    pub kind: String,
+    pub event_type: String,
+    pub message: String,
+    pub command: Option<String>,
+    pub file_path: Option<String>,
+}
+
 #[derive(Default)]
 struct CodexConversation {
     thread_id: Option<String>,
@@ -39,38 +49,56 @@ impl CodexAgentState {
         }
     }
 
-    pub fn ask(
+    pub fn ask<F>(
         &self,
         input: &str,
         model: &str,
         history: &[ChatHistoryMessage],
-    ) -> Result<String, String> {
+        progress: F,
+    ) -> Result<String, String>
+    where
+        F: FnMut(CodexProgressEvent),
+    {
         let mut conversation = self
             .conversation
             .lock()
             .map_err(|_| "Codex 会話状態を取得できませんでした。".to_string())?;
-        conversation.ask(input, model, history)
+        conversation.ask(input, model, history, progress)
     }
 }
 
 impl CodexConversation {
-    fn ask(
+    fn ask<F>(
         &mut self,
         input: &str,
         model: &str,
         history: &[ChatHistoryMessage],
-    ) -> Result<String, String> {
+        mut progress: F,
+    ) -> Result<String, String>
+    where
+        F: FnMut(CodexProgressEvent),
+    {
         let prompt = build_codex_prompt(input, history);
+        progress(status_event("codex/start", "Codex を起動しています..."));
         let mut client = CodexAppServerClient::start("codex")?;
         client.initialize()?;
+        progress(status_event("codex/initialized", "Codex に接続しました"));
 
         let thread_result = if let Some(thread_id) = self.thread_id.as_deref() {
+            progress(status_event(
+                "thread/resume",
+                "Codex thread を再開しています...",
+            ));
             client.request(
                 "thread/resume",
                 thread_params(thread_id, model),
                 CODEX_TIMEOUT,
             )?
         } else {
+            progress(status_event(
+                "thread/start",
+                "Codex thread を開始しています...",
+            ));
             client.request("thread/start", thread_params("", model), CODEX_TIMEOUT)?
         };
 
@@ -84,7 +112,8 @@ impl CodexConversation {
             turn_params(&thread_id, &prompt, model),
             CODEX_TIMEOUT,
         )?;
-        client.wait_for_turn()
+        progress(status_event("turn/start", "応答ターンを開始しました"));
+        client.wait_for_turn(progress)
     }
 }
 
@@ -206,7 +235,10 @@ impl CodexAppServerClient {
         }))
     }
 
-    fn wait_for_turn(&mut self) -> Result<String, String> {
+    fn wait_for_turn<F>(&mut self, mut progress: F) -> Result<String, String>
+    where
+        F: FnMut(CodexProgressEvent),
+    {
         let mut deltas = String::new();
         let mut completed_messages = Vec::new();
 
@@ -228,7 +260,15 @@ impl CodexAppServerClient {
                         deltas.push_str(delta);
                     }
                 }
+                "item/started" => {
+                    if let Some(event) = progress_event_from_item(method, &params) {
+                        progress(event);
+                    }
+                }
                 "item/completed" => {
+                    if let Some(event) = progress_event_from_item(method, &params) {
+                        progress(event);
+                    }
                     if let Some(item) = params.get("item") {
                         let item_type = item.get("type").and_then(Value::as_str).unwrap_or("");
                         if item_type == "agentMessage" {
@@ -242,6 +282,7 @@ impl CodexAppServerClient {
                     }
                 }
                 "turn/completed" => {
+                    progress(status_event("turn/completed", "応答ターンが完了しました"));
                     let content = completed_messages
                         .last()
                         .cloned()
@@ -252,7 +293,11 @@ impl CodexAppServerClient {
                         Ok(content)
                     };
                 }
-                "error" => return Err(format_codex_error(&params)),
+                "error" => {
+                    let message = format_codex_error(&params);
+                    progress(status_event("error", &message));
+                    return Err(message);
+                }
                 _ => {}
             }
         }
@@ -292,6 +337,141 @@ impl CodexAppServerClient {
         writeln!(self.stdin, "{line}")
             .and_then(|_| self.stdin.flush())
             .map_err(|error| format!("Codex app-server への送信に失敗しました: {error}"))
+    }
+}
+
+fn status_event(event_type: &str, message: &str) -> CodexProgressEvent {
+    CodexProgressEvent {
+        kind: "status".to_string(),
+        event_type: event_type.to_string(),
+        message: message.to_string(),
+        command: None,
+        file_path: None,
+    }
+}
+
+fn progress_event_from_item(method: &str, params: &Value) -> Option<CodexProgressEvent> {
+    let item = params.get("item")?;
+    let item_type = item.get("type").and_then(Value::as_str).unwrap_or("item");
+    let phase = if method == "item/started" {
+        "開始"
+    } else {
+        "完了"
+    };
+
+    match item_type {
+        "commandExecution" => {
+            let command = first_json_text(item, &["command"]);
+            Some(CodexProgressEvent {
+                kind: "command".to_string(),
+                event_type: method.to_string(),
+                message: if command.is_empty() {
+                    format!("{phase}: コマンド実行")
+                } else {
+                    format!("{phase}: {command}")
+                },
+                command: if command.is_empty() {
+                    None
+                } else {
+                    Some(command)
+                },
+                file_path: None,
+            })
+        }
+        "mcpToolCall" => {
+            let server = item.get("server").and_then(Value::as_str).unwrap_or("");
+            let tool = item.get("tool").and_then(Value::as_str).unwrap_or("");
+            let tool_name = [server, tool]
+                .into_iter()
+                .filter(|value| !value.is_empty())
+                .collect::<Vec<_>>()
+                .join(".");
+            Some(CodexProgressEvent {
+                kind: "command".to_string(),
+                event_type: method.to_string(),
+                message: if tool_name.is_empty() {
+                    format!("{phase}: MCP tool call")
+                } else {
+                    format!("{phase}: {tool_name}")
+                },
+                command: if tool_name.is_empty() {
+                    None
+                } else {
+                    Some(tool_name)
+                },
+                file_path: None,
+            })
+        }
+        "reasoning" => Some(CodexProgressEvent {
+            kind: "reasoning".to_string(),
+            event_type: method.to_string(),
+            message: format!("{phase}: 推論"),
+            command: None,
+            file_path: None,
+        }),
+        "fileChange" => {
+            let path = first_json_text(
+                item,
+                &[
+                    "path",
+                    "filePath",
+                    "targetPath",
+                    "relativePath",
+                    "absolutePath",
+                ],
+            );
+            Some(CodexProgressEvent {
+                kind: "fileChange".to_string(),
+                event_type: method.to_string(),
+                message: if path.is_empty() {
+                    format!("{phase}: ファイル変更")
+                } else {
+                    format!("{phase}: {path}")
+                },
+                command: None,
+                file_path: if path.is_empty() { None } else { Some(path) },
+            })
+        }
+        "agentMessage" => None,
+        _ => Some(CodexProgressEvent {
+            kind: "status".to_string(),
+            event_type: method.to_string(),
+            message: format!("{phase}: {item_type}"),
+            command: None,
+            file_path: None,
+        }),
+    }
+}
+
+fn first_json_text(value: &Value, keys: &[&str]) -> String {
+    match value {
+        Value::Object(map) => {
+            for key in keys {
+                if let Some(text) = map.get(*key).and_then(Value::as_str) {
+                    let text = text.trim();
+                    if !text.is_empty() {
+                        return text.to_string();
+                    }
+                }
+            }
+            for nested in map.values() {
+                let text = first_json_text(nested, keys);
+                if !text.is_empty() {
+                    return text;
+                }
+            }
+            String::new()
+        }
+        Value::Array(items) => {
+            for item in items {
+                let text = first_json_text(item, keys);
+                if !text.is_empty() {
+                    return text;
+                }
+            }
+            String::new()
+        }
+        _ => String::new(),
     }
 }
 

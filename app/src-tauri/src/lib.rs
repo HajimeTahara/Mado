@@ -10,7 +10,7 @@ use std::{
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, LogicalSize, Manager, WebviewWindow, WindowEvent,
+    AppHandle, Emitter, LogicalSize, Manager, WebviewWindow, WindowEvent,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
@@ -37,6 +37,7 @@ struct OperationPreview {
 
 #[tauri::command]
 fn ask_provider(
+    window: tauri::Window,
     state: tauri::State<'_, CodexAgentState>,
     input: String,
     provider: String,
@@ -44,7 +45,9 @@ fn ask_provider(
     history: Option<Vec<ChatHistoryMessage>>,
 ) -> String {
     if provider == "codex" {
-        return match state.ask(&input, &model, &history.unwrap_or_default()) {
+        return match state.ask(&input, &model, &history.unwrap_or_default(), |event| {
+            let _ = window.emit("codex-progress", event);
+        }) {
             Ok(answer) => answer,
             Err(error) => format!(
                 "Codex に接続できませんでした。\n\n{error}\n\nCodex CLI のインストール、ログイン状態、`codex app-server --stdio` が利用できるかを確認してください。"

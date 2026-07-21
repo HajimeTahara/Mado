@@ -7,6 +7,14 @@ export type Message = {
   createdAt: string;
 };
 
+export type CodexProgressEvent = {
+  kind: "status" | "command" | "reasoning" | "fileChange";
+  eventType: string;
+  message: string;
+  command?: string | null;
+  filePath?: string | null;
+};
+
 export type AttachedFile = {
   id: string;
   name: string;

@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { Message, OperationPreview, Provider } from "./types";
+import type { CodexProgressEvent, Message, OperationPreview, Provider } from "./types";
 
 const isTauri = "__TAURI_INTERNALS__" in window || "__TAURI__" in window;
 
@@ -25,6 +26,18 @@ export async function resetCodexConversation() {
     await invoke("reset_codex_conversation");
   } catch {
     // Reset is best-effort; a failed reset should not block starting a new local UI thread.
+  }
+}
+
+export async function onCodexProgress(handler: (event: CodexProgressEvent) => void) {
+  if (!isTauri) {
+    return () => {};
+  }
+
+  try {
+    return await listen<CodexProgressEvent>("codex-progress", ({ payload }) => handler(payload));
+  } catch {
+    return () => {};
   }
 }
 

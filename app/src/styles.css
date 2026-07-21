@@ -310,7 +310,8 @@ button {
 
 [data-message-transparent="true"] .message,
 [data-message-transparent="true"] .operation-preview,
-[data-message-transparent="true"] .file-summary {
+[data-message-transparent="true"] .file-summary,
+[data-message-transparent="true"] .codex-progress {
   background: transparent;
   backdrop-filter: none;
 }
@@ -363,7 +364,8 @@ button {
 }
 
 .operation-preview,
-.file-summary {
+.file-summary,
+.codex-progress {
   width: 100%;
   padding: 10px;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -424,6 +426,78 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.codex-progress {
+  display: grid;
+  gap: 8px;
+}
+
+.progress-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--mado-text-color, #f8f8f4);
+}
+
+.progress-heading strong {
+  font-size: 0.86rem;
+}
+
+.progress-list {
+  display: grid;
+  gap: 6px;
+}
+
+.progress-row {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  color: rgba(244, 244, 240, 0.76);
+  font-size: 0.78rem;
+}
+
+.progress-dot {
+  width: 6px;
+  height: 6px;
+  margin-top: 8px;
+  border-radius: 50%;
+  background: rgba(244, 244, 240, 0.34);
+}
+
+.progress-row.command .progress-dot {
+  background: #78d4be;
+}
+
+.progress-row.fileChange .progress-dot {
+  background: #e8c56d;
+}
+
+.progress-row.reasoning .progress-dot {
+  background: #8fb7ff;
+}
+
+.progress-kind {
+  display: inline-block;
+  margin-right: 6px;
+  color: rgba(244, 244, 240, 0.52);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+}
+
+.progress-row p {
+  display: inline;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+[data-theme="light"] .progress-row {
+  color: rgba(34, 38, 34, 0.72);
+}
+
+[data-theme="light"] .progress-kind {
+  color: rgba(34, 38, 34, 0.48);
 }
 
 .settings-popover {
