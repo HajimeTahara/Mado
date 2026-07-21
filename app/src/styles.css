@@ -124,6 +124,7 @@ button {
   border-radius: 8px;
   background: rgba(18, 21, 21, 0.8);
   backdrop-filter: blur(16px);
+  color: var(--mado-text-color, inherit);
 }
 
 [data-theme="light"] .input-wrap {
@@ -137,10 +138,15 @@ button {
   min-height: 28px;
   padding: 4px 0 4px 2px;
   resize: none;
-  color: inherit;
+  color: var(--mado-text-color, inherit);
   border: 0;
   outline: 0;
   background: transparent;
+}
+
+[data-input-transparent="true"] .input-wrap {
+  background: transparent;
+  backdrop-filter: none;
 }
 
 .input-wrap textarea::placeholder {
@@ -288,7 +294,7 @@ button {
   width: 100%;
   padding: 11px 12px;
   border-radius: 8px;
-  color: #f8f8f4;
+  color: var(--mado-text-color, #f8f8f4);
   background: rgba(50, 52, 52, 0.86);
   backdrop-filter: blur(12px);
 }
@@ -300,6 +306,13 @@ button {
 
 .message.assistant {
   align-self: stretch;
+}
+
+[data-message-transparent="true"] .message,
+[data-message-transparent="true"] .operation-preview,
+[data-message-transparent="true"] .file-summary {
+  background: transparent;
+  backdrop-filter: none;
 }
 
 .message.status {
@@ -355,7 +368,7 @@ button {
   padding: 10px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
-  color: #f8f8f4;
+  color: var(--mado-text-color, #f8f8f4);
   background: rgba(18, 20, 20, 0.44);
 }
 
@@ -525,6 +538,10 @@ button {
   background: rgba(255, 255, 255, 0.07);
 }
 
+.field input[type="color"] {
+  padding: 3px;
+}
+
 [data-theme="light"] .field input,
 [data-theme="light"] .field select {
   border-color: rgba(34, 38, 34, 0.14);
@@ -540,6 +557,13 @@ button {
 .toggle-group {
   display: grid;
   gap: 6px;
+}
+
+.color-setting {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
 }
 
 .toggle-group > span {
@@ -558,6 +582,24 @@ button {
 .toggle-grid button.selected {
   background: #78d4be;
   color: #07231d;
+}
+
+.text-reset-button {
+  min-height: 34px;
+  padding: 0 9px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.text-reset-button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="light"] .text-reset-button:hover {
+  background: rgba(34, 38, 34, 0.07);
 }
 
 .check-row {

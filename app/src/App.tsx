@@ -26,7 +26,10 @@ const defaultSettings: ProviderSettings = {
   alwaysOnTop: false,
   translucent: true,
   backgroundMode: "transparent",
-  theme: "dark"
+  theme: "dark",
+  inputTransparent: false,
+  messageTransparent: false,
+  textColor: ""
 };
 
 const providerDefaults: Record<Provider, { model: string; endpoint: string }> = {
@@ -63,6 +66,13 @@ function App() {
     document.documentElement.dataset.theme = settings.theme;
     document.documentElement.dataset.translucent = String(settings.translucent);
     document.documentElement.dataset.background = settings.backgroundMode;
+    document.documentElement.dataset.inputTransparent = String(settings.inputTransparent);
+    document.documentElement.dataset.messageTransparent = String(settings.messageTransparent);
+    if (settings.textColor) {
+      document.documentElement.style.setProperty("--mado-text-color", settings.textColor);
+    } else {
+      document.documentElement.style.removeProperty("--mado-text-color");
+    }
     localStorage.setItem("mado-settings", JSON.stringify(settings));
   }, [settings]);
 
@@ -393,6 +403,28 @@ function SettingsPanel({
             </div>
           </div>
 
+          <div className="toggle-group" aria-label="テキストボックス">
+            <span>テキストボックス</span>
+            <div className="toggle-grid">
+              <button
+                type="button"
+                className={settings.inputTransparent ? "selected" : ""}
+                onClick={() => setSettings((current) => ({ ...current, inputTransparent: !current.inputTransparent }))}
+              >
+                入力欄を透明
+              </button>
+              <button
+                type="button"
+                className={settings.messageTransparent ? "selected" : ""}
+                onClick={() =>
+                  setSettings((current) => ({ ...current, messageTransparent: !current.messageTransparent }))
+                }
+              >
+                履歴を透明
+              </button>
+            </div>
+          </div>
+
           <div className="toggle-group" aria-label="テーマ">
             <span>テーマ</span>
             <div className="toggle-grid">
@@ -413,6 +445,24 @@ function SettingsPanel({
                 Light
               </button>
             </div>
+          </div>
+
+          <div className="color-setting">
+            <label className="field">
+              <span>文字色</span>
+              <input
+                type="color"
+                value={settings.textColor || defaultTextColor(settings.theme)}
+                onChange={(event) => setSettings((current) => ({ ...current, textColor: event.target.value }))}
+              />
+            </label>
+            <button
+              type="button"
+              className="text-reset-button"
+              onClick={() => setSettings((current) => ({ ...current, textColor: "" }))}
+            >
+              既定に戻す
+            </button>
           </div>
 
           <label className="check-row">
@@ -481,6 +531,10 @@ function readSettings(): ProviderSettings {
     ...defaultSettings,
     ...readStorage<Partial<ProviderSettings>>("mado-settings", {})
   };
+}
+
+function defaultTextColor(theme: ProviderSettings["theme"]) {
+  return theme === "light" ? "#222622" : "#f4f4f0";
 }
 
 function makeMessage(role: Message["role"], content: string): Message {

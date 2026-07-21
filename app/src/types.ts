@@ -24,6 +24,9 @@ export type ProviderSettings = {
   translucent: boolean;
   backgroundMode: "transparent" | "solid";
   theme: "dark" | "light";
+  inputTransparent: boolean;
+  messageTransparent: boolean;
+  textColor: string;
 };
 
 export type OperationPreview = {
