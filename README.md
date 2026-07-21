@@ -162,6 +162,12 @@ npm install
 npm run dev
 ```
 
+On Windows, you can also start the desktop app from the repository root.
+
+```bat
+start-mado.bat
+```
+
 ## Architecture Sketch
 
 ```text

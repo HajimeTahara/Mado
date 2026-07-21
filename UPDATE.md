@@ -5,6 +5,7 @@
 - アプリ実装を `app/` 配下へ移動し、ルート直下をドキュメントとリポジトリ管理ファイル中心に整理。
 - `app/src/` に React + TypeScript UI、`app/src-tauri/` に Tauri + Rust 側を集約。
 - README に新しいプロジェクト構成と開発コマンドの場所を追記。
+- Windows 向けにルート直下から起動できる `start-mado.bat` を追加。
 
 ## ver 0.1.0
 
