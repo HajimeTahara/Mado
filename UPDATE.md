@@ -1,5 +1,11 @@
 # UPDATE
 
+## ver 0.1.3
+
+- Mado 用のテキストなしアイコンを追加。
+- ダークモード向け、ライトモード向け、アプリ本体向けの PNG/SVG と Windows 用 ICO を作成。
+- アイコン確認用の `docs/ICON.md` と `docs/assets/icons/` を追加。
+
 ## ver 0.1.2
 
 - Vite の開発サーバーが Tauri/Rust の生成物を監視しないようにし、Windows で `mado_lib.dll` がロック中に `EBUSY` で落ちる問題を修正。

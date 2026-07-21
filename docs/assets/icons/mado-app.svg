@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Mado app icon">
+  <defs>
+    <linearGradient id="pane-app" x1="70" y1="52" x2="188" y2="206" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e9fff7"/>
+      <stop offset="0.55" stop-color="#81d7bf"/>
+      <stop offset="1" stop-color="#48a98f"/>
+    </linearGradient>
+  </defs>
+  <path d="M62 42h96c20.99 0 38 17.01 38 38v96c0 20.99-17.01 38-38 38H62c-20.99 0-38-17.01-38-38V80c0-20.99 17.01-38 38-38Z" fill="none" stroke="#eafff8" stroke-width="14"/>
+  <path d="M92 74h102c20.99 0 38 17.01 38 38v72c0 20.99-17.01 38-38 38H92c-20.99 0-38-17.01-38-38v-72c0-20.99 17.01-38 38-38Z" fill="#101816" stroke="#d8fff3" stroke-width="10"/>
+  <path d="M101 93h84c15.46 0 28 12.54 28 28v54c0 15.46-12.54 28-28 28h-84c-15.46 0-28-12.54-28-28v-54c0-15.46 12.54-28 28-28Z" fill="url(#pane-app)"/>
+  <path d="M95 121h96" stroke="#0b2019" stroke-width="8" stroke-linecap="round" opacity="0.34"/>
+  <path d="M124 100v95" stroke="#0b2019" stroke-width="8" stroke-linecap="round" opacity="0.28"/>
+  <path d="M190 43l6.83 18.17L215 68l-18.17 6.83L190 93l-6.83-18.17L165 68l18.17-6.83L190 43Z" fill="#eafff8"/>
+</svg>

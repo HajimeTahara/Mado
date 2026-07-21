@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Mado icon for light mode">
+  <defs>
+    <linearGradient id="pane-light" x1="72" y1="56" x2="190" y2="208" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1f6f5c"/>
+      <stop offset="0.58" stop-color="#24594c"/>
+      <stop offset="1" stop-color="#15352e"/>
+    </linearGradient>
+    <linearGradient id="edge-light" x1="42" y1="36" x2="214" y2="220" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1d5d50"/>
+      <stop offset="1" stop-color="#0e2f29"/>
+    </linearGradient>
+  </defs>
+  <path d="M62 42h96c20.99 0 38 17.01 38 38v96c0 20.99-17.01 38-38 38H62c-20.99 0-38-17.01-38-38V80c0-20.99 17.01-38 38-38Z" fill="none" stroke="url(#edge-light)" stroke-width="14"/>
+  <path d="M92 74h102c20.99 0 38 17.01 38 38v72c0 20.99-17.01 38-38 38H92c-20.99 0-38-17.01-38-38v-72c0-20.99 17.01-38 38-38Z" fill="#fbf8f0" stroke="#183d35" stroke-width="10"/>
+  <path d="M101 93h84c15.46 0 28 12.54 28 28v54c0 15.46-12.54 28-28 28h-84c-15.46 0-28-12.54-28-28v-54c0-15.46 12.54-28 28-28Z" fill="url(#pane-light)"/>
+  <path d="M104 94h83c14.36 0 26 11.64 26 26v8H73v-8c0-14.36 11.64-26 26-26h5Z" fill="#ffffff" opacity="0.18"/>
+  <path d="M95 121h96" stroke="#e8fff6" stroke-width="8" stroke-linecap="round" opacity="0.28"/>
+  <path d="M124 100v95" stroke="#e8fff6" stroke-width="8" stroke-linecap="round" opacity="0.22"/>
+  <path d="M190 43l6.83 18.17L215 68l-18.17 6.83L190 93l-6.83-18.17L165 68l18.17-6.83L190 43Z" fill="#1b5b4e"/>
+</svg>
