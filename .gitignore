@@ -1,0 +1,11 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/schemas/
+.codex/
+.agents/
+vite.log
+vite.err.log
+preview.log
+preview.err.log
+*.log
