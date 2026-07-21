@@ -85,7 +85,7 @@ function localAnswer(input: string, provider: Provider, model: string) {
     return localTranslate(input);
   }
 
-  return `Mado MVP は ${provider} / ${model} の設定で受け取りました。今は安全なローカル応答モードなので、短い質問、翻訳、ファイル操作プレビューの流れを確認できます。`;
+  return `Mado MVP は ${provider} / ${model} の設定で受け取りました。今は安全なローカル応答モードなので、短い質問とファイル操作プレビューの流れを確認できます。`;
 }
 
 function localTranslate(text: string) {

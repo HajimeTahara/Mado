@@ -43,7 +43,7 @@ fn ask_provider(input: String, provider: String, model: String) -> String {
     }
 
     format!(
-        "Mado MVP は {provider} / {model} の設定で受け取りました。\n\n実プロバイダー接続前のローカル応答モードです。短い質問、和訳、ファイル操作プレビューの流れを確認できます。"
+        "Mado MVP は {provider} / {model} の設定で受け取りました。\n\n実プロバイダー接続前のローカル応答モードです。短い質問とファイル操作プレビューの流れを確認できます。"
     )
 }
 

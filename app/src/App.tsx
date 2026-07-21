@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   FileText,
   Loader2,
@@ -14,11 +14,9 @@ import {
 import type { AttachedFile, Message, OperationPreview, Provider, ProviderSettings } from "./types";
 import {
   askProvider,
-  captureScreenshotTranslation,
   onWindowFocusChanged,
   planFileOperation,
-  startWindowDrag,
-  translateToJapanese
+  startWindowDrag
 } from "./tauri";
 
 const defaultSettings: ProviderSettings = {
@@ -42,7 +40,7 @@ const welcome: Message = {
   id: "welcome",
   role: "assistant",
   content:
-    "こんにちは、Mado です。短い質問、英文の和訳、ファイル操作のプレビューをここで扱えます。危ない操作は必ず確認してから進めます。",
+    "こんにちは、Mado です。短い質問やファイル操作のプレビューをここで扱えます。危ない操作は必ず確認してから進めます。",
   createdAt: new Date().toISOString()
 };
 
@@ -58,10 +56,6 @@ function App() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const settingsPopoverRef = useRef<HTMLElement>(null);
-
-  const latestUserText = useMemo(() => {
-    return [...messages].reverse().find((message) => message.role === "user")?.content ?? "";
-  }, [messages]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = settings.theme;
@@ -139,21 +133,6 @@ function App() {
     setIsBusy(false);
   }
 
-  async function handleTranslateSelection() {
-    const sourceText = files.find((file) => file.text)?.text ?? latestUserText;
-    setIsBusy(true);
-    const translated = await translateToJapanese(sourceText);
-    setMessages((current) => [...current, makeMessage("assistant", translated)]);
-    setIsBusy(false);
-  }
-
-  async function handleScreenshot() {
-    setIsBusy(true);
-    const result = await captureScreenshotTranslation();
-    setMessages((current) => [...current, makeMessage("assistant", result)]);
-    setIsBusy(false);
-  }
-
   async function handleFiles(incoming: FileList | File[]) {
     const parsed = await Promise.all(Array.from(incoming).map(readFile));
     setFiles((current) => [...parsed, ...current].slice(0, 8));
@@ -196,6 +175,25 @@ function App() {
             }
           }}
         />
+        <section className="conversation-board" aria-label="会話">
+          <div className="message-list">
+            {messages.map((message) => (
+              <article className={`message ${message.role}`} key={message.id}>
+                <p>{message.content}</p>
+              </article>
+            ))}
+            {preview && <OperationPreviewCard preview={preview} />}
+            {files.length > 0 && <FileSummary files={files} />}
+            {isBusy && (
+              <article className="message assistant status">
+                <Loader2 className="spin" size={15} />
+                <p>考えています...</p>
+              </article>
+            )}
+            <div ref={scrollRef} />
+          </div>
+        </section>
+
         <form
           className="prompt-row"
           onSubmit={(event) => {
@@ -204,6 +202,19 @@ function App() {
           }}
         >
           <div className="input-wrap">
+            <label className="upload-button" title="ファイルアップロード">
+              <Upload size={16} />
+              <input
+                type="file"
+                multiple
+                accept=".txt,.md,.pdf,.docx,.html"
+                onChange={(event) => {
+                  if (event.target.files) {
+                    void handleFiles(event.target.files);
+                  }
+                }}
+              />
+            </label>
             <textarea
               value={input}
               onChange={(event) => setInput(event.target.value)}
@@ -244,53 +255,6 @@ function App() {
             </button>
           </div>
         </form>
-
-        <section className="conversation-board" aria-label="会話">
-          <div className="message-list">
-            {messages.map((message) => (
-              <article className={`message ${message.role}`} key={message.id}>
-                <p>{message.content}</p>
-              </article>
-            ))}
-            {preview && <OperationPreviewCard preview={preview} />}
-            {files.length > 0 && <FileSummary files={files} />}
-            {isBusy && (
-              <article className="message assistant status">
-                <Loader2 className="spin" size={15} />
-                <p>考えています...</p>
-              </article>
-            )}
-            <div ref={scrollRef} />
-          </div>
-        </section>
-
-        <div className="utility-row" aria-label="補助操作">
-          <button type="button" onClick={handleTranslateSelection}>
-            和訳
-          </button>
-          <button type="button" onClick={handleScreenshot}>
-            スクショ
-          </button>
-          <label className="file-picker">
-            <Upload size={14} />
-            <span>{files.length ? `${files.length} 件` : "ファイル"}</span>
-            <input
-              type="file"
-              multiple
-              accept=".txt,.md,.pdf,.docx,.html"
-              onChange={(event) => {
-                if (event.target.files) {
-                  void handleFiles(event.target.files);
-                }
-              }}
-            />
-          </label>
-          {preview && (
-            <button type="button" onClick={() => setPreview(null)}>
-              プレビューを閉じる
-            </button>
-          )}
-        </div>
 
         {isSettingsOpen && (
           <aside ref={settingsPopoverRef} className="settings-popover" aria-label="設定">
