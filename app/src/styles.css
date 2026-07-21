@@ -64,8 +64,8 @@ button {
 .mado-panel {
   position: relative;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 9px;
+  grid-template-rows: 18px auto minmax(0, 1fr) auto;
+  gap: 7px;
   width: min(100%, 620px);
   min-height: 100vh;
   margin: 0 auto;
@@ -77,10 +77,9 @@ button {
 }
 
 .drag-strip {
-  position: absolute;
-  inset: 0 0 auto;
-  height: 8px;
+  min-height: 18px;
   cursor: move;
+  user-select: none;
 }
 
 [data-theme="light"] .mado-panel {

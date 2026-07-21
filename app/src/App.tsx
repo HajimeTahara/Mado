@@ -48,6 +48,8 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const settingsButtonRef = useRef<HTMLButtonElement>(null);
+  const settingsPopoverRef = useRef<HTMLElement>(null);
 
   const latestUserText = useMemo(() => {
     return [...messages].reverse().find((message) => message.role === "user")?.content ?? "";
@@ -75,6 +77,23 @@ function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (!isSettingsOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as Node;
+      if (settingsPopoverRef.current?.contains(target) || settingsButtonRef.current?.contains(target)) {
+        return;
+      }
+      setIsSettingsOpen(false);
+    }
+
+    window.addEventListener("pointerdown", handlePointerDown, true);
+    return () => window.removeEventListener("pointerdown", handlePointerDown, true);
+  }, [isSettingsOpen]);
 
   async function handleSend() {
     const text = input.trim();
@@ -183,6 +202,7 @@ function App() {
               <MessageSquarePlus size={21} />
             </button>
             <button
+              ref={settingsButtonRef}
               className={`icon-button ${isSettingsOpen ? "active" : ""}`}
               type="button"
               onClick={() => setIsSettingsOpen((current) => !current)}
@@ -242,7 +262,7 @@ function App() {
         </div>
 
         {isSettingsOpen && (
-          <aside className="settings-popover" aria-label="設定">
+          <aside ref={settingsPopoverRef} className="settings-popover" aria-label="設定">
             <SettingsPanel settings={settings} setSettings={setSettings} updateProvider={updateProvider} />
           </aside>
         )}
