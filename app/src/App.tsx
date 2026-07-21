@@ -12,7 +12,14 @@ import {
   Upload
 } from "lucide-react";
 import type { AttachedFile, Message, OperationPreview, Provider, ProviderSettings } from "./types";
-import { askProvider, captureScreenshotTranslation, planFileOperation, translateToJapanese } from "./tauri";
+import {
+  askProvider,
+  captureScreenshotTranslation,
+  onWindowFocusChanged,
+  planFileOperation,
+  startWindowDrag,
+  translateToJapanese
+} from "./tauri";
 
 const defaultSettings: ProviderSettings = {
   provider: "openai",
@@ -20,6 +27,7 @@ const defaultSettings: ProviderSettings = {
   endpoint: "https://api.openai.com/v1",
   alwaysOnTop: false,
   translucent: true,
+  backgroundMode: "transparent",
   theme: "dark"
 };
 
@@ -39,7 +47,7 @@ const welcome: Message = {
 };
 
 function App() {
-  const [settings, setSettings] = useState<ProviderSettings>(() => readStorage("mado-settings", defaultSettings));
+  const [settings, setSettings] = useState<ProviderSettings>(() => readSettings());
   const [messages, setMessages] = useState<Message[]>(() => readStorage("mado-history", [welcome]));
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<AttachedFile[]>([]);
@@ -58,6 +66,7 @@ function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = settings.theme;
     document.documentElement.dataset.translucent = String(settings.translucent);
+    document.documentElement.dataset.background = settings.backgroundMode;
     localStorage.setItem("mado-settings", JSON.stringify(settings));
   }, [settings]);
 
@@ -94,6 +103,20 @@ function App() {
     window.addEventListener("pointerdown", handlePointerDown, true);
     return () => window.removeEventListener("pointerdown", handlePointerDown, true);
   }, [isSettingsOpen]);
+
+  useEffect(() => {
+    let unlisten = () => {};
+
+    void onWindowFocusChanged((focused) => {
+      if (!focused) {
+        setIsSettingsOpen(false);
+      }
+    }).then((cleanup) => {
+      unlisten = cleanup;
+    });
+
+    return () => unlisten();
+  }, []);
 
   async function handleSend() {
     const text = input.trim();
@@ -164,7 +187,15 @@ function App() {
           void handleFiles(event.dataTransfer.files);
         }}
       >
-        <div className="drag-strip" data-tauri-drag-region aria-hidden="true" />
+        <div
+          className="drag-strip"
+          aria-label="ウィンドウを移動"
+          onPointerDown={(event) => {
+            if (event.button === 0) {
+              void startWindowDrag();
+            }
+          }}
+        />
         <form
           className="prompt-row"
           onSubmit={(event) => {
@@ -350,6 +381,26 @@ function SettingsPanel({
         />
       </label>
 
+      <div className="toggle-group" aria-label="背景">
+        <span>背景</span>
+        <div className="toggle-grid">
+          <button
+            type="button"
+            className={settings.backgroundMode === "transparent" ? "selected" : ""}
+            onClick={() => setSettings((current) => ({ ...current, backgroundMode: "transparent" }))}
+          >
+            透明
+          </button>
+          <button
+            type="button"
+            className={settings.backgroundMode === "solid" ? "selected" : ""}
+            onClick={() => setSettings((current) => ({ ...current, backgroundMode: "solid" }))}
+          >
+            背景あり
+          </button>
+        </div>
+      </div>
+
       <div className="toggle-grid">
         <button
           type="button"
@@ -399,6 +450,13 @@ function readStorage<T>(key: string, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+function readSettings(): ProviderSettings {
+  return {
+    ...defaultSettings,
+    ...readStorage<Partial<ProviderSettings>>("mado-settings", {})
+  };
 }
 
 function makeMessage(role: Message["role"], content: string): Message {

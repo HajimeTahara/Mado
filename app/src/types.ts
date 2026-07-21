@@ -22,6 +22,7 @@ export type ProviderSettings = {
   endpoint: string;
   alwaysOnTop: boolean;
   translucent: boolean;
+  backgroundMode: "transparent" | "solid";
   theme: "dark" | "light";
 };
 

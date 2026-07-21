@@ -3,5 +3,10 @@
   "identifier": "default",
   "description": "Default capability for Mado",
   "windows": ["main"],
-  "permissions": ["core:default", "global-shortcut:allow-register", "global-shortcut:allow-unregister"]
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister"
+  ]
 }

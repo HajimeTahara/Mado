@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { OperationPreview, Provider } from "./types";
 
 const isTauri = "__TAURI_INTERNALS__" in window || "__TAURI__" in window;
@@ -48,6 +49,30 @@ export async function captureScreenshotTranslation() {
     return await invoke<string>("capture_screenshot_translation");
   } catch {
     return "スクリーンショット翻訳の入口を開けませんでした。権限とデスクトップ実行環境を確認してください。";
+  }
+}
+
+export async function startWindowDrag() {
+  if (!isTauri) {
+    return;
+  }
+
+  try {
+    await getCurrentWindow().startDragging();
+  } catch {
+    // Dragging can fail when the pointer event was not initiated on a draggable surface.
+  }
+}
+
+export async function onWindowFocusChanged(handler: (focused: boolean) => void) {
+  if (!isTauri) {
+    return () => {};
+  }
+
+  try {
+    return await getCurrentWindow().onFocusChanged(({ payload }) => handler(payload));
+  } catch {
+    return () => {};
   }
 }
 
