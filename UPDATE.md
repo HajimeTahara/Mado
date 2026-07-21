@@ -1,5 +1,11 @@
 # UPDATE
 
+## ver 0.1.1
+
+- アプリ実装を `app/` 配下へ移動し、ルート直下をドキュメントとリポジトリ管理ファイル中心に整理。
+- `app/src/` に React + TypeScript UI、`app/src-tauri/` に Tauri + Rust 側を集約。
+- README に新しいプロジェクト構成と開発コマンドの場所を追記。
+
 ## ver 0.1.0
 
 - README の MVP に沿って Tauri + React + TypeScript の初期アプリを作成。

@@ -144,6 +144,24 @@ Alternative:
 | Tauri plugin | tauri-plugin-global-shortcut | `Ctrl+Alt+M` の表示 / 非表示ショートカット |
 | Rust crates | serde / serde_json | Tauri コマンドの入出力データ整形 |
 
+## Project Structure
+
+The app implementation lives under `app/`.
+
+```text
+app/
+  src/        React + TypeScript UI
+  src-tauri/ Tauri + Rust desktop shell
+```
+
+Run development commands from `app/`.
+
+```bash
+cd app
+npm install
+npm run dev
+```
+
 ## Architecture Sketch
 
 ```text
