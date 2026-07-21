@@ -19,6 +19,7 @@ body,
   min-width: 340px;
   min-height: 100vh;
   margin: 0;
+  background: transparent;
 }
 
 body {
@@ -44,20 +45,20 @@ button {
 .shell {
   display: grid;
   min-height: 100vh;
-  padding: 8px;
-  background: rgba(21, 23, 22, 0.18);
+  padding: 0;
+  background: transparent;
 }
 
 [data-theme="light"] .shell {
-  background: rgba(246, 244, 238, 0.25);
+  background: transparent;
 }
 
 [data-translucent="false"] .shell {
-  background: #151716;
+  background: transparent;
 }
 
 [data-theme="light"][data-translucent="false"] .shell {
-  background: #f6f4ee;
+  background: transparent;
 }
 
 .mado-panel {
@@ -66,20 +67,25 @@ button {
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 9px;
   width: min(100%, 620px);
-  min-height: calc(100vh - 16px);
+  min-height: 100vh;
   margin: 0 auto;
   padding: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 0;
   border-radius: 8px;
-  background: rgba(22, 24, 24, 0.66);
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(18px);
+  background: transparent;
+  box-shadow: none;
+}
+
+.drag-strip {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 8px;
+  cursor: move;
 }
 
 [data-theme="light"] .mado-panel {
-  border-color: rgba(34, 38, 34, 0.12);
-  background: rgba(255, 253, 248, 0.72);
-  box-shadow: 0 18px 42px rgba(34, 38, 34, 0.13);
+  background: transparent;
+  box-shadow: none;
 }
 
 .prompt-row {
@@ -95,9 +101,10 @@ button {
   align-items: center;
   min-height: 48px;
   padding: 0 5px 0 13px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(30, 31, 31, 0.58);
+  backdrop-filter: blur(16px);
 }
 
 [data-theme="light"] .input-wrap {
@@ -162,7 +169,7 @@ button {
 .utility-row button:hover,
 .file-picker:hover,
 .toggle-grid button:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 [data-theme="light"] .icon-button:hover,
@@ -176,7 +183,7 @@ button {
 .icon-button.active,
 .mic-button.active {
   color: #78d4be;
-  background: rgba(120, 212, 190, 0.14);
+  background: transparent;
 }
 
 .send-icon {
@@ -196,11 +203,12 @@ button {
   min-height: 0;
   overflow: hidden;
   border-radius: 8px;
-  background: rgba(63, 65, 64, 0.82);
+  background: rgba(54, 55, 55, 0.58);
+  backdrop-filter: blur(14px);
 }
 
 [data-theme="light"] .conversation-board {
-  background: rgba(64, 68, 66, 0.74);
+  background: rgba(246, 244, 238, 0.46);
 }
 
 .message-list {
@@ -257,6 +265,7 @@ button {
   padding: 0 9px;
   color: rgba(244, 244, 240, 0.78);
   font-size: 0.82rem;
+  background: transparent;
 }
 
 [data-theme="light"] .utility-row button,

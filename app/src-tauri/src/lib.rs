@@ -4,7 +4,11 @@ use std::{
     path::{Path, PathBuf},
     time::SystemTime,
 };
-use tauri::{Manager, WebviewWindow};
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Manager, WebviewWindow, WindowEvent,
+};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 #[derive(Serialize)]
@@ -93,7 +97,16 @@ fn plan_file_operation(instruction: String) -> OperationPreview {
 
 pub fn run() {
     tauri::Builder::default()
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
         .setup(|app| {
+            configure_desktop_panel(app.handle())?;
+            setup_tray(app.handle())?;
+
             let shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyM);
             let shortcut_for_handler = shortcut.clone();
 
@@ -122,6 +135,57 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running Mado");
+}
+
+fn configure_desktop_panel(app: &AppHandle) -> tauri::Result<()> {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_decorations(false);
+        let _ = window.set_shadow(false);
+        let _ = window.set_skip_taskbar(true);
+    }
+
+    Ok(())
+}
+
+fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
+    let show = MenuItem::with_id(app, "show", "表示 / 非表示", true, Option::<&str>::None)?;
+    let quit = MenuItem::with_id(app, "quit", "終了", true, Option::<&str>::None)?;
+    let menu = Menu::with_items(app, &[&show, &quit])?;
+
+    let mut tray_builder = TrayIconBuilder::with_id("mado")
+        .tooltip("Mado")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "show" => {
+                if let Some(window) = app.get_webview_window("main") {
+                    toggle_window(&window);
+                }
+            }
+            "quit" => {
+                app.exit(0);
+            }
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                if let Some(window) = tray.app_handle().get_webview_window("main") {
+                    toggle_window(&window);
+                }
+            }
+        });
+
+    if let Some(icon) = app.default_window_icon() {
+        tray_builder = tray_builder.icon(icon.clone());
+    }
+
+    tray_builder.build(app)?;
+    Ok(())
 }
 
 fn toggle_window(window: &WebviewWindow) {

@@ -145,6 +145,7 @@ function App() {
           void handleFiles(event.dataTransfer.files);
         }}
       >
+        <div className="drag-strip" data-tauri-drag-region aria-hidden="true" />
         <form
           className="prompt-row"
           onSubmit={(event) => {

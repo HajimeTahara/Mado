@@ -136,7 +136,7 @@ Alternative:
 
 | 種類 | ライブラリ / ツール | 用途 |
 | --- | --- | --- |
-| Desktop shell | Tauri 2 | 小さなデスクトップウィンドウ、Rust コマンド、アプリ設定 |
+| Desktop shell | Tauri 2 | 小さなデスクトップウィンドウ、透明/枠なしウィンドウ、トレイ常駐、Rust コマンド、アプリ設定 |
 | Frontend | React 18 | チャット UI、設定パネル、ファイルプレビュー |
 | Language | TypeScript | UI 実装の型安全性 |
 | Build | Vite 8 | フロントエンド開発サーバーと本番ビルド |
