@@ -333,111 +333,135 @@ function SettingsPanel({
         <h2>設定</h2>
       </div>
 
-      <label className="field">
-        <span>プロバイダー</span>
-        <select value={settings.provider} onChange={(event) => updateProvider(event.target.value as Provider)}>
-          <option value="openai">OpenAI</option>
-          <option value="anthropic">Anthropic</option>
-          <option value="openrouter">OpenRouter</option>
-          <option value="ollama">Ollama</option>
-        </select>
-      </label>
+      <section className="settings-category" aria-labelledby="connection-settings-title">
+        <h3 id="connection-settings-title">接続</h3>
 
-      <label className="field">
-        <span>モデル</span>
-        <input
-          value={settings.model}
-          onChange={(event) => setSettings((current) => ({ ...current, model: event.target.value }))}
-        />
-      </label>
+        <div className="setting-group">
+          <h4>プロバイダー</h4>
+          <label className="field">
+            <span>サービス</span>
+            <select value={settings.provider} onChange={(event) => updateProvider(event.target.value as Provider)}>
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="openrouter">OpenRouter</option>
+              <option value="ollama">Ollama</option>
+            </select>
+          </label>
 
-      <label className="field">
-        <span>エンドポイント</span>
-        <input
-          value={settings.endpoint}
-          onChange={(event) => setSettings((current) => ({ ...current, endpoint: event.target.value }))}
-        />
-      </label>
+          <label className="field">
+            <span>モデル</span>
+            <input
+              value={settings.model}
+              onChange={(event) => setSettings((current) => ({ ...current, model: event.target.value }))}
+            />
+          </label>
 
-      <div className="toggle-group" aria-label="背景">
-        <span>背景</span>
-        <div className="toggle-grid">
-          <button
-            type="button"
-            className={settings.backgroundMode === "transparent" ? "selected" : ""}
-            onClick={() => setSettings((current) => ({ ...current, backgroundMode: "transparent" }))}
-          >
-            透明
-          </button>
-          <button
-            type="button"
-            className={settings.backgroundMode === "solid" ? "selected" : ""}
-            onClick={() => setSettings((current) => ({ ...current, backgroundMode: "solid" }))}
-          >
-            背景あり
-          </button>
+          <label className="field">
+            <span>エンドポイント</span>
+            <input
+              value={settings.endpoint}
+              onChange={(event) => setSettings((current) => ({ ...current, endpoint: event.target.value }))}
+            />
+          </label>
         </div>
-      </div>
 
-      <div className="toggle-grid">
-        <button
-          type="button"
-          className={settings.theme === "dark" ? "selected" : ""}
-          onClick={() => setSettings((current) => ({ ...current, theme: "dark" }))}
-        >
-          <Moon size={16} />
-          Dark
-        </button>
-        <button
-          type="button"
-          className={settings.theme === "light" ? "selected" : ""}
-          onClick={() => setSettings((current) => ({ ...current, theme: "light" }))}
-        >
-          <Sun size={16} />
-          Light
-        </button>
-      </div>
+        <p className="settings-note">API キー保存と実プロバイダー接続は次の段階で OS の認証情報ストアに接続します。</p>
+      </section>
 
-      <label className="check-row">
-        <input
-          type="checkbox"
-          checked={settings.translucent}
-          onChange={(event) => setSettings((current) => ({ ...current, translucent: event.target.checked }))}
-        />
-        半透明
-      </label>
+      <section className="settings-category" aria-labelledby="display-settings-title">
+        <h3 id="display-settings-title">表示</h3>
 
-      <label className="check-row">
-        <input
-          type="checkbox"
-          checked={settings.alwaysOnTop}
-          onChange={(event) => setSettings((current) => ({ ...current, alwaysOnTop: event.target.checked }))}
-        />
-        常に手前
-      </label>
-
-      <p className="settings-note">API キー保存と実プロバイダー接続は次の段階で OS の認証情報ストアに接続します。</p>
-
-      <section className="shortcut-section" aria-label="ショートカット">
-        <h3>ショートカット</h3>
-        <dl className="shortcut-list">
-          <div>
-            <dt>Enter</dt>
-            <dd>送信</dd>
+        <div className="setting-group">
+          <h4>外観</h4>
+          <div className="toggle-group" aria-label="背景">
+            <span>背景</span>
+            <div className="toggle-grid">
+              <button
+                type="button"
+                className={settings.backgroundMode === "transparent" ? "selected" : ""}
+                onClick={() => setSettings((current) => ({ ...current, backgroundMode: "transparent" }))}
+              >
+                透明
+              </button>
+              <button
+                type="button"
+                className={settings.backgroundMode === "solid" ? "selected" : ""}
+                onClick={() => setSettings((current) => ({ ...current, backgroundMode: "solid" }))}
+              >
+                背景あり
+              </button>
+            </div>
           </div>
-          <div>
-            <dt>Shift + Enter</dt>
-            <dd>改行</dd>
+
+          <div className="toggle-group" aria-label="テーマ">
+            <span>テーマ</span>
+            <div className="toggle-grid">
+              <button
+                type="button"
+                className={settings.theme === "dark" ? "selected" : ""}
+                onClick={() => setSettings((current) => ({ ...current, theme: "dark" }))}
+              >
+                <Moon size={16} />
+                Dark
+              </button>
+              <button
+                type="button"
+                className={settings.theme === "light" ? "selected" : ""}
+                onClick={() => setSettings((current) => ({ ...current, theme: "light" }))}
+              >
+                <Sun size={16} />
+                Light
+              </button>
+            </div>
           </div>
-          <div>
-            <dt>Ctrl + Shift + N</dt>
-            <dd>新規チャット</dd>
-          </div>
-          <div>
-            <dt>Ctrl + Alt + M</dt>
-            <dd>表示 / 非表示</dd>
-          </div>
-        </dl>
+
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={settings.translucent}
+              onChange={(event) => setSettings((current) => ({ ...current, translucent: event.target.checked }))}
+            />
+            半透明
+          </label>
+        </div>
+
+        <div className="setting-group">
+          <h4>ウィンドウ</h4>
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={settings.alwaysOnTop}
+              onChange={(event) => setSettings((current) => ({ ...current, alwaysOnTop: event.target.checked }))}
+            />
+            常に手前
+          </label>
+        </div>
+      </section>
+
+      <section className="settings-category" aria-labelledby="operation-settings-title">
+        <h3 id="operation-settings-title">操作</h3>
+
+        <div className="setting-group">
+          <h4>ショートカット</h4>
+          <dl className="shortcut-list">
+            <div>
+              <dt>Enter</dt>
+              <dd>送信</dd>
+            </div>
+            <div>
+              <dt>Shift + Enter</dt>
+              <dd>改行</dd>
+            </div>
+            <div>
+              <dt>Ctrl + Shift + N</dt>
+              <dd>新規チャット</dd>
+            </div>
+            <div>
+              <dt>Ctrl + Alt + M</dt>
+              <dd>表示 / 非表示</dd>
+            </div>
+          </dl>
+        </div>
       </section>
     </div>
   );
