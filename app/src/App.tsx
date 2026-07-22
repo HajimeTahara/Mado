@@ -425,29 +425,6 @@ function App() {
           <div className="prompt-main">
             {openedProject && <ProjectBadge project={openedProject} />}
             <div className="input-wrap">
-              <button
-                className={`project-button ${openedProject ? "active" : ""}`}
-                type="button"
-                onClick={() => void handleOpenProject()}
-                disabled={isBusy}
-                title={openedProject ? `プロジェクト: ${openedProject.path}` : "プロジェクトを開く"}
-                aria-label="プロジェクトを開く"
-              >
-                <Plus size={16} />
-              </button>
-              <label className="upload-button" title="ファイルアップロード">
-                <Upload size={16} />
-                <input
-                  type="file"
-                  multiple
-                  accept=".txt,.md,.pdf,.docx,.html"
-                  onChange={(event) => {
-                    if (event.target.files) {
-                      void handleFiles(event.target.files);
-                    }
-                  }}
-                />
-              </label>
               <div className="prompt-textarea-shell">
                 <textarea
                   value={input}
@@ -468,55 +445,82 @@ function App() {
                   </span>
                 )}
               </div>
-              <div className="codex-selectors" ref={codexMenuRef}>
-                <button
-                  className="codex-selector-trigger"
-                  type="button"
-                  onClick={() => setIsCodexMenuOpen((current) => !current)}
-                  title="Codex のモデルと推論レベル"
-                  aria-label="Codex のモデルと推論レベル"
-                  aria-expanded={isCodexMenuOpen}
-                >
-                  <span className="selector-label-full">
-                    {codexModelLabel(selectedCodexModel)} / {codexReasoningLabel(selectedCodexReasoning)}
-                  </span>
-                  <span className="selector-label-short">
-                    {codexModelShortLabel(selectedCodexModel)}/{codexReasoningShortLabel(selectedCodexReasoning)}
-                  </span>
-                  <ChevronDown size={13} />
-                </button>
-                {isCodexMenuOpen && (
-                  <CodexSelectorMenu
-                    selectedModel={selectedCodexModel}
-                    selectedReasoning={selectedCodexReasoning}
-                    onModelChange={setSelectedCodexModel}
-                    onReasoningChange={setSelectedCodexReasoning}
-                    onClose={() => setIsCodexMenuOpen(false)}
-                  />
-                )}
+              <div className="prompt-control-row">
+                <div className="prompt-control-left">
+                  <button
+                    className={`project-button ${openedProject ? "active" : ""}`}
+                    type="button"
+                    onClick={() => void handleOpenProject()}
+                    disabled={isBusy}
+                    title={openedProject ? `プロジェクト: ${openedProject.path}` : "プロジェクトを開く"}
+                    aria-label="プロジェクトを開く"
+                  >
+                    <Plus size={16} />
+                  </button>
+                  <label className="upload-button" title="ファイルアップロード">
+                    <Upload size={16} />
+                    <input
+                      type="file"
+                      multiple
+                      accept=".txt,.md,.pdf,.docx,.html"
+                      onChange={(event) => {
+                        if (event.target.files) {
+                          void handleFiles(event.target.files);
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+                <div className="prompt-control-right">
+                  <div className="codex-selectors" ref={codexMenuRef}>
+                    <button
+                      className="codex-selector-trigger"
+                      type="button"
+                      onClick={() => setIsCodexMenuOpen((current) => !current)}
+                      title="Codex のモデルと推論レベル"
+                      aria-label="Codex のモデルと推論レベル"
+                      aria-expanded={isCodexMenuOpen}
+                    >
+                      <span className="selector-label-full">
+                        {codexModelLabel(selectedCodexModel)} / {codexReasoningLabel(selectedCodexReasoning)}
+                      </span>
+                      <span className="selector-label-short">
+                        {codexModelShortLabel(selectedCodexModel)}/{codexReasoningShortLabel(selectedCodexReasoning)}
+                      </span>
+                      <ChevronDown size={13} />
+                    </button>
+                    {isCodexMenuOpen && (
+                      <CodexSelectorMenu
+                        selectedModel={selectedCodexModel}
+                        selectedReasoning={selectedCodexReasoning}
+                        onModelChange={setSelectedCodexModel}
+                        onReasoningChange={setSelectedCodexReasoning}
+                        onClose={() => setIsCodexMenuOpen(false)}
+                      />
+                    )}
+                  </div>
+                  <button
+                    className={`mic-button ${isVoiceMode ? "active" : ""}`}
+                    type="button"
+                    onClick={() => setIsVoiceMode((current) => !current)}
+                    title="音声入力に切り替え"
+                    aria-pressed={isVoiceMode}
+                  >
+                    <Mic size={17} />
+                  </button>
+                  <button
+                    ref={settingsButtonRef}
+                    className={`icon-button settings-inline-button ${isSettingsOpen ? "active" : ""}`}
+                    type="button"
+                    onClick={() => setIsSettingsOpen((current) => !current)}
+                    title="設定"
+                    aria-expanded={isSettingsOpen}
+                  >
+                    <Settings size={20} />
+                  </button>
+                </div>
               </div>
-              <button
-                className={`mic-button ${isVoiceMode ? "active" : ""}`}
-                type="button"
-                onClick={() => setIsVoiceMode((current) => !current)}
-                title="音声入力に切り替え"
-                aria-pressed={isVoiceMode}
-              >
-                <Mic size={17} />
-              </button>
             </div>
-          </div>
-          <div className="panel-actions" aria-label="操作">
-            <button
-              ref={settingsButtonRef}
-              className={`icon-button ${isSettingsOpen ? "active" : ""}`}
-              type="button"
-              onClick={() => setIsSettingsOpen((current) => !current)}
-              title="設定"
-              aria-expanded={isSettingsOpen}
-            >
-              <Settings size={22} />
-            </button>
           </div>
         </form>
 

@@ -106,11 +106,8 @@ button {
 }
 
 .prompt-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 34px;
-  gap: 8px;
-  align-items: end;
-  min-height: 58px;
+  display: block;
+  min-height: 92px;
   padding: 6px 0 0;
 }
 
@@ -145,11 +142,10 @@ button {
 
 .input-wrap {
   display: grid;
-  grid-template-columns: 30px 30px minmax(0, 1fr) minmax(0, auto) 34px;
-  align-items: center;
-  column-gap: 0;
-  min-height: 46px;
-  padding: 0 5px 0 6px;
+  grid-template-rows: minmax(36px, auto) 34px;
+  gap: 6px;
+  min-height: 82px;
+  padding: 9px 7px 7px 9px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 8px;
   background: rgba(18, 21, 21, 0.8);
@@ -164,14 +160,15 @@ button {
 
 .prompt-textarea-shell {
   position: relative;
+  align-self: stretch;
   min-width: 0;
 }
 
 .input-wrap textarea {
   width: 100%;
   max-height: 96px;
-  min-height: 28px;
-  padding: 4px 0 4px 2px;
+  min-height: 34px;
+  padding: 4px 2px;
   overflow-y: auto;
   resize: none;
   color: var(--mado-text-color, inherit);
@@ -183,13 +180,12 @@ button {
 .prompt-placeholder {
   position: absolute;
   left: 2px;
-  top: 50%;
+  top: 4px;
   max-width: 100%;
   overflow: hidden;
   color: rgba(244, 244, 240, 0.66);
   pointer-events: none;
   text-overflow: ellipsis;
-  transform: translateY(-50%);
   white-space: nowrap;
 }
 
@@ -202,11 +198,37 @@ button {
   min-width: 0;
 }
 
+.prompt-control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.prompt-control-left,
+.prompt-control-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.prompt-control-left {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+}
+
+.prompt-control-right {
+  flex: 0 1 auto;
+  justify-content: flex-end;
+}
+
 .codex-selector-trigger {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  max-width: 12.5rem;
+  max-width: min(12.5rem, 40vw);
   min-height: 28px;
   padding: 3px 7px;
   border: 0;
@@ -382,6 +404,12 @@ button {
 .icon-button {
   width: 40px;
   height: 40px;
+}
+
+.settings-inline-button {
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
 }
 
 .mic-button {
@@ -829,7 +857,7 @@ button {
 
 .settings-popover {
   position: absolute;
-  bottom: 62px;
+  bottom: 108px;
   right: 8px;
   z-index: 2;
   width: min(310px, calc(100% - 16px));
@@ -1235,27 +1263,26 @@ button {
 
 @media (max-width: 430px) {
   .prompt-row {
-    grid-template-columns: minmax(0, 1fr) 32px;
-    gap: 6px;
-  }
-
-  .panel-actions {
-    justify-content: flex-end;
-  }
-
-  .panel-actions .icon-button {
-    width: 32px;
-    height: 32px;
+    min-height: 88px;
   }
 
   .input-wrap {
-    grid-template-columns: 28px 28px minmax(34px, 1fr) minmax(0, auto) 32px;
-    padding-right: 4px;
-    padding-left: 5px;
+    grid-template-rows: minmax(34px, auto) 32px;
+    min-height: 78px;
+    padding: 8px 6px 6px 8px;
+  }
+
+  .prompt-control-row {
+    gap: 5px;
+  }
+
+  .prompt-control-left,
+  .prompt-control-right {
+    gap: 2px;
   }
 
   .codex-selector-trigger {
-    max-width: 6.45rem;
+    max-width: 6.6rem;
     padding-right: 5px;
     padding-left: 5px;
   }
@@ -1273,16 +1300,24 @@ button {
   .mado-panel {
     padding: 6px;
   }
+
+  .settings-popover {
+    bottom: 102px;
+  }
 }
 
 @media (max-width: 370px) {
-  .input-wrap {
-    grid-template-columns: 26px 26px minmax(26px, 1fr) minmax(0, auto) 30px;
-  }
-
   .codex-selector-trigger {
     max-width: 5.55rem;
     gap: 4px;
     font-size: 0.68rem;
+  }
+
+  .project-button,
+  .upload-button,
+  .mic-button,
+  .settings-inline-button {
+    width: 26px;
+    min-height: 28px;
   }
 }
