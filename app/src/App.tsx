@@ -992,7 +992,7 @@ function SettingsPanel({
               <dd>新規チャット</dd>
             </div>
             <div>
-              <dt>Ctrl + Alt + M</dt>
+              <dt>Alt + Shift + M</dt>
               <dd>表示 / 非表示</dd>
             </div>
           </dl>

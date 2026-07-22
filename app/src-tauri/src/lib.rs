@@ -248,7 +248,7 @@ pub fn run() {
             configure_desktop_panel(app.handle())?;
             setup_tray(app.handle())?;
 
-            let shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyM);
+            let shortcut = Shortcut::new(Some(Modifiers::ALT | Modifiers::SHIFT), Code::KeyM);
             let shortcut_for_handler = shortcut.clone();
 
             app.handle().plugin(
