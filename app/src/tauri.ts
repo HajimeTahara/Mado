@@ -9,6 +9,7 @@ export async function askProvider(
   input: string,
   provider: Provider,
   model: string,
+  reasoningEffort: string,
   history: Message[] = [],
   projectPath?: string
 ) {
@@ -17,7 +18,7 @@ export async function askProvider(
   }
 
   try {
-    return await invoke<string>("ask_provider", { input, provider, model, history, projectPath });
+    return await invoke<string>("ask_provider", { input, provider, model, reasoningEffort, history, projectPath });
   } catch (error) {
     return `Codex への送信に失敗しました。\n\n${String(error)}`;
   }

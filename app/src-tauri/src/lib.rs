@@ -45,6 +45,7 @@ fn ask_provider(
     input: String,
     provider: String,
     model: String,
+    reasoning_effort: Option<String>,
     history: Option<Vec<ChatHistoryMessage>>,
     project_path: Option<String>,
 ) -> String {
@@ -52,6 +53,7 @@ fn ask_provider(
         return match state.ask(
             &input,
             &model,
+            reasoning_effort.as_deref(),
             &history.unwrap_or_default(),
             project_path.as_deref(),
             |event| {

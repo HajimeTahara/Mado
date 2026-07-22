@@ -18,7 +18,6 @@ import type {
   Message,
   OpenedProject,
   OperationPreview,
-  Provider,
   ProviderSettings
 } from "./types";
 import {
@@ -37,7 +36,8 @@ import {
 
 const defaultSettings: ProviderSettings = {
   provider: "codex",
-  model: "gpt-5",
+  model: "gpt-5.6-terra",
+  reasoningEffort: "medium",
   endpoint: "codex app-server --stdio",
   alwaysOnTop: false,
   translucent: true,
@@ -48,13 +48,23 @@ const defaultSettings: ProviderSettings = {
   textColor: ""
 };
 
-const providerDefaults: Record<Provider, { model: string; endpoint: string }> = {
-  codex: { model: "gpt-5", endpoint: "codex app-server --stdio" },
-  openai: { model: "gpt-4.1-mini", endpoint: "https://api.openai.com/v1" },
-  anthropic: { model: "claude-3-5-haiku-latest", endpoint: "https://api.anthropic.com" },
-  openrouter: { model: "openai/gpt-4.1-mini", endpoint: "https://openrouter.ai/api/v1" },
-  ollama: { model: "llama3.2", endpoint: "http://localhost:11434" }
-};
+const codexModelOptions = [
+  { id: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
+  { id: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
+  { id: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
+  { id: "gpt-5.4-mini", label: "GPT-5.4 mini" },
+  { id: "gpt-5.4-nano", label: "GPT-5.4 nano" }
+] as const;
+
+const codexReasoningOptions = [
+  { value: "", label: "Default" },
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "xhigh", label: "XHigh" },
+  { value: "max", label: "Max" },
+  { value: "ultra", label: "Ultra" }
+] as const;
 
 const maxStoredMessages = 200;
 
@@ -67,6 +77,8 @@ type TrustPrompt = {
 
 function App() {
   const [settings, setSettings] = useState<ProviderSettings>(() => readSettings());
+  const [selectedCodexModel, setSelectedCodexModel] = useState(() => settings.model);
+  const [selectedCodexReasoning, setSelectedCodexReasoning] = useState(() => settings.reasoningEffort);
   const [messages, setMessages] = useState<Message[]>(() => readMessages());
   const [openedProject, setOpenedProject] = useState<OpenedProject | null>(() =>
     readStorage<OpenedProject | null>("mado-opened-project", null)
@@ -96,6 +108,11 @@ function App() {
     }
     localStorage.setItem("mado-settings", JSON.stringify(settings));
   }, [settings]);
+
+  useEffect(() => {
+    setSelectedCodexModel(settings.model);
+    setSelectedCodexReasoning(settings.reasoningEffort);
+  }, [settings.model, settings.reasoningEffort]);
 
   useEffect(() => {
     localStorage.setItem("mado-history", JSON.stringify(messages.slice(-maxStoredMessages)));
@@ -194,7 +211,14 @@ function App() {
     }
 
     try {
-      const answer = await askProvider(text, settings.provider, settings.model, messages, openedProject?.path);
+      const answer = await askProvider(
+        text,
+        settings.provider,
+        selectedCodexModel,
+        selectedCodexReasoning,
+        messages,
+        openedProject?.path
+      );
       setMessages((current) => [...current, makeMessage("assistant", answer)]);
     } finally {
       setIsBusy(false);
@@ -204,15 +228,6 @@ function App() {
   async function handleFiles(incoming: FileList | File[]) {
     const parsed = await Promise.all(Array.from(incoming).map(readFile));
     setFiles((current) => [...parsed, ...current].slice(0, 8));
-  }
-
-  function updateProvider(provider: Provider) {
-    setSettings((current) => ({
-      ...current,
-      provider,
-      model: providerDefaults[provider].model,
-      endpoint: providerDefaults[provider].endpoint
-    }));
   }
 
   function handleNewChat() {
@@ -358,6 +373,32 @@ function App() {
                   }
                 }}
               />
+              <div className="codex-selectors" aria-label="Codex のモデルと推論レベル">
+                <select
+                  value={selectedCodexModel}
+                  onChange={(event) => setSelectedCodexModel(event.target.value)}
+                  title="Codex モデル"
+                  aria-label="Codex モデル"
+                >
+                  {codexModelOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={selectedCodexReasoning}
+                  onChange={(event) => setSelectedCodexReasoning(event.target.value)}
+                  title="Codex 推論レベル"
+                  aria-label="Codex 推論レベル"
+                >
+                  {codexReasoningOptions.map((option) => (
+                    <option key={option.value || "default"} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <button
                 className={`mic-button ${isVoiceMode ? "active" : ""}`}
                 type="button"
@@ -385,7 +426,7 @@ function App() {
 
         {isSettingsOpen && (
           <aside ref={settingsPopoverRef} className="settings-popover" aria-label="設定">
-            <SettingsPanel settings={settings} setSettings={setSettings} updateProvider={updateProvider} />
+            <SettingsPanel settings={settings} setSettings={setSettings} />
           </aside>
         )}
         {trustPrompt && (
@@ -531,12 +572,10 @@ function FileSummary({ files }: { files: AttachedFile[] }) {
 
 function SettingsPanel({
   settings,
-  setSettings,
-  updateProvider
+  setSettings
 }: {
   settings: ProviderSettings;
   setSettings: React.Dispatch<React.SetStateAction<ProviderSettings>>;
-  updateProvider: (provider: Provider) => void;
 }) {
   const [fileOpenStatus, setFileOpenStatus] = useState("");
 
@@ -557,40 +596,39 @@ function SettingsPanel({
         <h2>設定</h2>
       </div>
 
-      <section className="settings-category" aria-labelledby="connection-settings-title">
-        <h3 id="connection-settings-title">接続</h3>
+      <section className="settings-category" aria-labelledby="codex-default-settings-title">
+        <h3 id="codex-default-settings-title">Codex</h3>
 
         <div className="setting-group">
-          <h4>プロバイダー</h4>
+          <h4>デフォルト</h4>
           <label className="field">
-            <span>サービス</span>
-            <select value={settings.provider} onChange={(event) => updateProvider(event.target.value as Provider)}>
-              <option value="codex">Codex</option>
+            <span>モデル</span>
+            <select
+              value={settings.model}
+              onChange={(event) => setSettings((current) => ({ ...current, model: event.target.value }))}
+            >
+              {codexModelOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </label>
 
           <label className="field">
-            <span>モデル</span>
-            <input
-              value={settings.model}
-              onChange={(event) => setSettings((current) => ({ ...current, model: event.target.value }))}
-            />
-          </label>
-
-          <label className="field">
-            <span>エンドポイント</span>
-            <input
-              value={settings.endpoint}
-              onChange={(event) => setSettings((current) => ({ ...current, endpoint: event.target.value }))}
-            />
+            <span>推論レベル</span>
+            <select
+              value={settings.reasoningEffort}
+              onChange={(event) => setSettings((current) => ({ ...current, reasoningEffort: event.target.value }))}
+            >
+              {codexReasoningOptions.map((option) => (
+                <option key={option.value || "default"} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
-
-        <p className="settings-note">
-          {settings.provider === "codex"
-            ? "Codex はローカルの Codex CLI とログイン状態を使用します。"
-            : "API キー保存と実プロバイダー接続は次の段階で OS の認証情報ストアに接続します。"}
-        </p>
       </section>
 
       <section className="settings-category" aria-labelledby="codex-file-settings-title">
@@ -772,12 +810,16 @@ function readSettings(): ProviderSettings {
     return {
       ...settings,
       provider: "codex",
-      model: providerDefaults.codex.model,
-      endpoint: providerDefaults.codex.endpoint
+      model: defaultSettings.model,
+      reasoningEffort: defaultSettings.reasoningEffort,
+      endpoint: defaultSettings.endpoint
     };
   }
 
-  return settings;
+  return {
+    ...settings,
+    reasoningEffort: settings.reasoningEffort ?? defaultSettings.reasoningEffort
+  };
 }
 
 function defaultTextColor(theme: ProviderSettings["theme"]) {

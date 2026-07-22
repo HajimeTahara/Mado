@@ -56,6 +56,7 @@ impl CodexAgentState {
         &self,
         input: &str,
         model: &str,
+        reasoning_effort: Option<&str>,
         history: &[ChatHistoryMessage],
         project_path: Option<&str>,
         progress: F,
@@ -67,7 +68,14 @@ impl CodexAgentState {
             .conversation
             .lock()
             .map_err(|_| "Codex 会話状態を取得できませんでした。".to_string())?;
-        conversation.ask(input, model, history, project_path, progress)
+        conversation.ask(
+            input,
+            model,
+            reasoning_effort,
+            history,
+            project_path,
+            progress,
+        )
     }
 }
 
@@ -76,6 +84,7 @@ impl CodexConversation {
         &mut self,
         input: &str,
         model: &str,
+        reasoning_effort: Option<&str>,
         history: &[ChatHistoryMessage],
         project_path: Option<&str>,
         mut progress: F,
@@ -124,7 +133,13 @@ impl CodexConversation {
 
         client.request(
             "turn/start",
-            turn_params(&thread_id, &prompt, model, self.project_path.as_deref()),
+            turn_params(
+                &thread_id,
+                &prompt,
+                model,
+                reasoning_effort,
+                self.project_path.as_deref(),
+            ),
             CODEX_TIMEOUT,
         )?;
         progress(status_event("turn/start", "応答ターンを開始しました"));
@@ -626,7 +641,13 @@ fn thread_params(thread_id: &str, model: &str, cwd: Option<&str>) -> Value {
     params
 }
 
-fn turn_params(thread_id: &str, prompt: &str, model: &str, cwd: Option<&str>) -> Value {
+fn turn_params(
+    thread_id: &str,
+    prompt: &str,
+    model: &str,
+    reasoning_effort: Option<&str>,
+    cwd: Option<&str>,
+) -> Value {
     let mut params = json!({
         "threadId": thread_id,
         "input": [{
@@ -639,6 +660,9 @@ fn turn_params(thread_id: &str, prompt: &str, model: &str, cwd: Option<&str>) ->
     });
     if !model.trim().is_empty() {
         params["model"] = json!(model.trim());
+    }
+    if let Some(reasoning_effort) = reasoning_effort.filter(|value| !value.trim().is_empty()) {
+        params["effort"] = json!(reasoning_effort.trim());
     }
     if let Some(cwd) = cwd.filter(|value| !value.trim().is_empty()) {
         params["cwd"] = json!(cwd);

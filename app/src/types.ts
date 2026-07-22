@@ -40,6 +40,7 @@ export type AttachedFile = {
 export type ProviderSettings = {
   provider: Provider;
   model: string;
+  reasoningEffort: string;
   endpoint: string;
   alwaysOnTop: boolean;
   translucent: boolean;
