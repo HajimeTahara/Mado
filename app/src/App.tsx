@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  Check,
+  ChevronDown,
   FileText,
   FolderOpen,
   Loader2,
@@ -89,9 +91,11 @@ function App() {
   const [trustPrompt, setTrustPrompt] = useState<TrustPrompt | null>(null);
   const [progressEvents, setProgressEvents] = useState<CodexProgressEvent[]>([]);
   const [isBusy, setIsBusy] = useState(false);
+  const [isCodexMenuOpen, setIsCodexMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const messageListRef = useRef<HTMLDivElement>(null);
+  const codexMenuRef = useRef<HTMLDivElement>(null);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const settingsPopoverRef = useRef<HTMLElement>(null);
 
@@ -165,6 +169,23 @@ function App() {
     window.addEventListener("pointerdown", handlePointerDown, true);
     return () => window.removeEventListener("pointerdown", handlePointerDown, true);
   }, [isSettingsOpen]);
+
+  useEffect(() => {
+    if (!isCodexMenuOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as Node;
+      if (codexMenuRef.current?.contains(target)) {
+        return;
+      }
+      setIsCodexMenuOpen(false);
+    }
+
+    window.addEventListener("pointerdown", handlePointerDown, true);
+    return () => window.removeEventListener("pointerdown", handlePointerDown, true);
+  }, [isCodexMenuOpen]);
 
   useEffect(() => {
     let unlisten = () => {};
@@ -373,31 +394,29 @@ function App() {
                   }
                 }}
               />
-              <div className="codex-selectors" aria-label="Codex のモデルと推論レベル">
-                <select
-                  value={selectedCodexModel}
-                  onChange={(event) => setSelectedCodexModel(event.target.value)}
-                  title="Codex モデル"
-                  aria-label="Codex モデル"
+              <div className="codex-selectors" ref={codexMenuRef}>
+                <button
+                  className="codex-selector-trigger"
+                  type="button"
+                  onClick={() => setIsCodexMenuOpen((current) => !current)}
+                  title="Codex のモデルと推論レベル"
+                  aria-label="Codex のモデルと推論レベル"
+                  aria-expanded={isCodexMenuOpen}
                 >
-                  {codexModelOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={selectedCodexReasoning}
-                  onChange={(event) => setSelectedCodexReasoning(event.target.value)}
-                  title="Codex 推論レベル"
-                  aria-label="Codex 推論レベル"
-                >
-                  {codexReasoningOptions.map((option) => (
-                    <option key={option.value || "default"} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  <span>
+                    {codexModelLabel(selectedCodexModel)} / {codexReasoningLabel(selectedCodexReasoning)}
+                  </span>
+                  <ChevronDown size={13} />
+                </button>
+                {isCodexMenuOpen && (
+                  <CodexSelectorMenu
+                    selectedModel={selectedCodexModel}
+                    selectedReasoning={selectedCodexReasoning}
+                    onModelChange={setSelectedCodexModel}
+                    onReasoningChange={setSelectedCodexReasoning}
+                    onClose={() => setIsCodexMenuOpen(false)}
+                  />
+                )}
               </div>
               <button
                 className={`mic-button ${isVoiceMode ? "active" : ""}`}
@@ -496,6 +515,68 @@ function ProjectBadge({ project }: { project: OpenedProject }) {
       <span>{project.path}</span>
     </div>
   );
+}
+
+function CodexSelectorMenu({
+  selectedModel,
+  selectedReasoning,
+  onModelChange,
+  onReasoningChange,
+  onClose
+}: {
+  selectedModel: string;
+  selectedReasoning: string;
+  onModelChange: (value: string) => void;
+  onReasoningChange: (value: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="codex-selector-menu" role="menu" aria-label="Codex モデルと推論レベル">
+      <div className="selector-group-label">Reasoning</div>
+      {codexReasoningOptions.map((option) => (
+        <button
+          className={`selector-menu-item ${selectedReasoning === option.value ? "selected" : ""}`}
+          key={option.value || "default"}
+          type="button"
+          role="menuitemradio"
+          aria-checked={selectedReasoning === option.value}
+          onClick={() => {
+            onReasoningChange(option.value);
+            onClose();
+          }}
+        >
+          <span>{option.label}</span>
+          {selectedReasoning === option.value && <Check size={14} />}
+        </button>
+      ))}
+      <div className="selector-divider" />
+      <div className="selector-group-label">Model</div>
+      {codexModelOptions.map((option) => (
+        <button
+          className={`selector-menu-item ${selectedModel === option.id ? "selected" : ""}`}
+          key={option.id}
+          type="button"
+          role="menuitemradio"
+          aria-checked={selectedModel === option.id}
+          onClick={() => {
+            onModelChange(option.id);
+            onClose();
+          }}
+        >
+          <span>{option.label}</span>
+          {selectedModel === option.id && <Check size={14} />}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function codexModelLabel(value: string) {
+  return codexModelOptions.find((option) => option.id === value)?.label ?? value;
+}
+
+function codexReasoningLabel(value: string) {
+  return (codexReasoningOptions.find((option) => option.value === value)?.label ?? value) || "Default";
 }
 
 function CodexProgress({ events }: { events: CodexProgressEvent[] }) {
