@@ -83,6 +83,21 @@ type TrustPrompt = {
   error?: string;
 };
 
+const conversationDragBlockSelector = [
+  ".message",
+  ".operation-preview",
+  ".file-summary",
+  ".codex-progress",
+  ".approval-overlay",
+  "button",
+  "a",
+  "input",
+  "textarea",
+  "select",
+  "label",
+  "[role='button']"
+].join(",");
+
 function App() {
   const [settings, setSettings] = useState<ProviderSettings>(() => readSettings());
   const [selectedCodexModel, setSelectedCodexModel] = useState(() => settings.model);
@@ -382,6 +397,25 @@ function App() {
     void resetCodexConversation();
   }
 
+  function handleConversationPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.button !== 0 || event.defaultPrevented) {
+      return;
+    }
+
+    const list = event.currentTarget;
+    const scrollbarWidth = list.offsetWidth - list.clientWidth;
+    if (scrollbarWidth > 0 && event.clientX >= list.getBoundingClientRect().right - scrollbarWidth) {
+      return;
+    }
+
+    const target = event.target as HTMLElement | null;
+    if (!target || target.closest(conversationDragBlockSelector)) {
+      return;
+    }
+
+    void startWindowDrag();
+  }
+
   return (
     <main className="shell">
       <section
@@ -403,7 +437,7 @@ function App() {
           }}
         />
         <section className="conversation-board" aria-label="会話">
-          <div className="message-list" ref={messageListRef}>
+          <div className="message-list" ref={messageListRef} onPointerDown={handleConversationPointerDown}>
             <div className="message-stack">
               {messages.map((message) => (
                 <article className={`message ${message.role}`} key={message.id}>

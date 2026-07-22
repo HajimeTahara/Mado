@@ -507,6 +507,7 @@ button {
   overflow-x: hidden;
   overflow-y: auto;
   padding: 0;
+  cursor: move;
   scrollbar-gutter: stable;
 }
 
@@ -545,6 +546,7 @@ button {
   color: var(--mado-text-color, #f8f8f4);
   background: rgba(50, 52, 52, 0.86);
   backdrop-filter: blur(12px);
+  cursor: auto;
 }
 
 .message.user {
@@ -620,6 +622,7 @@ button {
   border-radius: 8px;
   color: var(--mado-text-color, #f8f8f4);
   background: rgba(18, 20, 20, 0.44);
+  cursor: auto;
 }
 
 .operation-preview.danger {
