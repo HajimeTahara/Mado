@@ -3,7 +3,7 @@ mod codex_trust;
 
 use codex_agent::{ChatHistoryMessage, CodexAgentState};
 use codex_trust::CodexProjectTrustStatus;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -13,7 +13,8 @@ use std::{
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, LogicalSize, Manager, WebviewWindow, WindowEvent,
+    AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, PhysicalSize, Position, Size,
+    WebviewWindow, WindowEvent,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
@@ -37,6 +38,18 @@ struct OperationPreview {
     warnings: Vec<String>,
     files: Vec<FilePreview>,
 }
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WindowPlacement {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+}
+
+const MIN_WINDOW_WIDTH: u32 = 340;
+const MIN_WINDOW_HEIGHT: u32 = 420;
 
 #[tauri::command]
 async fn ask_provider(
@@ -207,10 +220,17 @@ pub fn run() {
                 api.prevent_close();
                 let _ = window.hide();
             }
-            WindowEvent::Moved(_) | WindowEvent::ScaleFactorChanged { .. } => {
+            WindowEvent::Moved(_) | WindowEvent::Resized(_) => {
+                if let Some(webview_window) = window.app_handle().get_webview_window(window.label())
+                {
+                    let _ = save_window_placement(&webview_window);
+                }
+            }
+            WindowEvent::ScaleFactorChanged { .. } => {
                 if let Some(webview_window) = window.app_handle().get_webview_window(window.label())
                 {
                     let _ = update_window_max_size(&webview_window);
+                    let _ = save_window_placement(&webview_window);
                 }
             }
             _ => {}
@@ -264,9 +284,82 @@ fn configure_desktop_panel(app: &AppHandle) -> tauri::Result<()> {
         let _ = window.set_shadow(false);
         let _ = window.set_skip_taskbar(true);
         update_window_max_size(&window)?;
+        let _ = restore_window_placement(&window);
     }
 
     Ok(())
+}
+
+fn window_placement_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| format!("Mado 設定フォルダの取得に失敗しました: {error}"))?;
+    Ok(dir.join("window-placement.json"))
+}
+
+fn save_window_placement(window: &WebviewWindow) -> Result<(), String> {
+    let position = window
+        .outer_position()
+        .map_err(|error| format!("ウィンドウ位置の取得に失敗しました: {error}"))?;
+    let size = window
+        .inner_size()
+        .map_err(|error| format!("ウィンドウサイズの取得に失敗しました: {error}"))?;
+    let placement = WindowPlacement {
+        x: position.x,
+        y: position.y,
+        width: size.width.max(MIN_WINDOW_WIDTH),
+        height: size.height.max(MIN_WINDOW_HEIGHT),
+    };
+    let path = window_placement_path(window.app_handle())?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| {
+            format!(
+                "Mado 設定フォルダを作成できませんでした ({}): {error}",
+                parent.display()
+            )
+        })?;
+    }
+    let text = serde_json::to_string_pretty(&placement)
+        .map_err(|error| format!("ウィンドウ配置設定の作成に失敗しました: {error}"))?;
+    fs::write(&path, text).map_err(|error| {
+        format!(
+            "ウィンドウ配置設定を書き込めませんでした ({}): {error}",
+            path.display()
+        )
+    })
+}
+
+fn restore_window_placement(window: &WebviewWindow) -> Result<(), String> {
+    let path = window_placement_path(window.app_handle())?;
+    if !path.is_file() {
+        return Ok(());
+    }
+    let text = fs::read_to_string(&path).map_err(|error| {
+        format!(
+            "ウィンドウ配置設定を読み込めませんでした ({}): {error}",
+            path.display()
+        )
+    })?;
+    let mut placement = serde_json::from_str::<WindowPlacement>(&text).map_err(|error| {
+        format!(
+            "ウィンドウ配置設定を解析できませんでした ({}): {error}",
+            path.display()
+        )
+    })?;
+    placement.width = placement.width.max(MIN_WINDOW_WIDTH);
+    placement.height = placement.height.max(MIN_WINDOW_HEIGHT);
+
+    let _ = window.set_size(Size::Physical(PhysicalSize::new(
+        placement.width,
+        placement.height,
+    )));
+    window
+        .set_position(Position::Physical(PhysicalPosition::new(
+            placement.x,
+            placement.y,
+        )))
+        .map_err(|error| format!("ウィンドウ位置を復元できませんでした: {error}"))
 }
 
 fn update_window_max_size(window: &WebviewWindow) -> tauri::Result<()> {
