@@ -118,8 +118,8 @@ function App() {
   }, [settings]);
 
   useEffect(() => {
-    setSelectedCodexModel(settings.model);
-    setSelectedCodexReasoning(settings.reasoningEffort);
+    setSelectedCodexModel(normalizeCodexModel(settings.model));
+    setSelectedCodexReasoning(normalizeCodexReasoning(settings.reasoningEffort));
   }, [settings.model, settings.reasoningEffort]);
 
   useEffect(() => {
@@ -245,7 +245,7 @@ function App() {
       const answer = await askProvider(
         text,
         settings.provider,
-        selectedCodexModel,
+        normalizeCodexModel(selectedCodexModel),
         selectedCodexReasoning,
         messages,
         openedProject?.path
@@ -638,11 +638,13 @@ function CodexSelectorMenu({
 }
 
 function codexModelLabel(value: string) {
-  return codexModelOptions.find((option) => option.id === value)?.label ?? value;
+  const model = normalizeCodexModel(value);
+  return codexModelOptions.find((option) => option.id === model)?.label ?? model;
 }
 
 function codexReasoningLabel(value: string) {
-  return (codexReasoningOptions.find((option) => option.value === value)?.label ?? value) || "Default";
+  const reasoning = normalizeCodexReasoning(value);
+  return (codexReasoningOptions.find((option) => option.value === reasoning)?.label ?? reasoning) || "Default";
 }
 
 function CodexProgress({ events }: { events: CodexProgressEvent[] }) {
@@ -1031,8 +1033,24 @@ function readSettings(): ProviderSettings {
 
   return {
     ...settings,
-    reasoningEffort: settings.reasoningEffort ?? defaultSettings.reasoningEffort
+    model: normalizeCodexModel(settings.model),
+    reasoningEffort: normalizeCodexReasoning(settings.reasoningEffort),
+    endpoint: settings.endpoint ?? defaultSettings.endpoint
   };
+}
+
+function normalizeCodexModel(value: string | undefined): string {
+  if (value && codexModelOptions.some((option) => option.id === value)) {
+    return value;
+  }
+  return defaultSettings.model;
+}
+
+function normalizeCodexReasoning(value: string | undefined): string {
+  if (value !== undefined && codexReasoningOptions.some((option) => option.value === value)) {
+    return value;
+  }
+  return defaultSettings.reasoningEffort;
 }
 
 function defaultTextColor(theme: ProviderSettings["theme"]) {
