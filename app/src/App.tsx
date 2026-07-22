@@ -230,11 +230,12 @@ function App() {
     setProgressEvents([]);
     setPendingApproval(null);
     setIsRespondingApproval(false);
+    setPreview(null);
     const userMessage = makeMessage("user", text);
     const nextMessages = [...messages, userMessage];
     setMessages(nextMessages);
 
-    if (looksLikeFileOperation(text)) {
+    if (settings.provider !== "codex" && looksLikeFileOperation(text)) {
       const operation = await planFileOperation(text);
       setPreview(operation);
     }

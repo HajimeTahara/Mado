@@ -178,8 +178,7 @@ impl CodexConversation {
             .ok_or_else(|| "Codex thread id を取得できませんでした。".to_string())?;
         self.thread_id = Some(thread_id.clone());
 
-        client.request_with_handlers(
-            "turn/start",
+        client.start_turn_and_wait(
             turn_params(
                 &thread_id,
                 &prompt,
@@ -187,12 +186,9 @@ impl CodexConversation {
                 reasoning_effort,
                 self.project_path.as_deref(),
             ),
-            CODEX_TIMEOUT,
-            &mut progress,
-            &mut approval,
-        )?;
-        progress(status_event("turn/start", "応答ターンを開始しました"));
-        client.wait_for_turn(progress, approval)
+            progress,
+            approval,
+        )
     }
 }
 
@@ -358,13 +354,27 @@ impl CodexAppServerClient {
         }))
     }
 
-    fn wait_for_turn<P, A>(&mut self, mut progress: P, mut approval: A) -> Result<String, String>
+    fn start_turn_and_wait<P, A>(
+        &mut self,
+        params: Value,
+        mut progress: P,
+        mut approval: A,
+    ) -> Result<String, String>
     where
         P: FnMut(CodexProgressEvent),
         A: FnMut(&CodexProgressEvent) -> Result<String, String>,
     {
+        let id = self.next_id;
+        self.next_id += 1;
+        self.write_json(json!({
+            "id": id,
+            "method": "turn/start",
+            "params": params
+        }))?;
+
         let mut deltas = String::new();
         let mut completed_messages = Vec::new();
+        let mut turn_start_reported = false;
 
         loop {
             let message = self.next_message(CODEX_TIMEOUT)?;
@@ -372,13 +382,30 @@ impl CodexAppServerClient {
                 self.handle_server_request(&message, &mut progress, &mut approval)?;
                 continue;
             }
+            if message.get("id").and_then(Value::as_i64) == Some(id) {
+                if let Some(error) = message.get("error") {
+                    return Err(format_codex_error(error));
+                }
+                if !turn_start_reported {
+                    progress(status_event("turn/start", "応答ターンを開始しました"));
+                    turn_start_reported = true;
+                }
+                continue;
+            }
 
             let Some(method) = message.get("method").and_then(Value::as_str) else {
+                self.stashed.push_back(message);
                 continue;
             };
             let params = message.get("params").cloned().unwrap_or_else(|| json!({}));
 
             match method {
+                "turn/started" => {
+                    if !turn_start_reported {
+                        progress(status_event("turn/start", "応答ターンを開始しました"));
+                        turn_start_reported = true;
+                    }
+                }
                 "item/agentMessage/delta" => {
                     if let Some(delta) = params.get("delta").and_then(Value::as_str) {
                         deltas.push_str(delta);

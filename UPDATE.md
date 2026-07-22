@@ -1,5 +1,10 @@
 # UPDATE
 
+## ver 0.3.6
+
+- Codex 利用時に旧ファイル操作プレビューが表示され、Codex の承認フローと紛らわしくなる問題を修正。
+- `turn/start` の response 待ち中に届く notification / approval request も処理し、承認ポップアップへ進めるように変更。
+
 ## ver 0.3.5
 
 - Codex 実行中に Tauri の同期 command が承認応答 IPC を塞ぎ、承認待ちでアプリが応答なしになる問題を修正。
