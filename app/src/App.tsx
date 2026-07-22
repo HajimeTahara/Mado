@@ -448,18 +448,26 @@ function App() {
                   }}
                 />
               </label>
-              <textarea
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                placeholder="Welcome to Mado!"
-                rows={1}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-                    event.preventDefault();
-                    void handleSend();
-                  }
-                }}
-              />
+              <div className="prompt-textarea-shell">
+                <textarea
+                  value={input}
+                  onChange={(event) => setInput(event.target.value)}
+                  aria-label="メッセージ"
+                  rows={1}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                      event.preventDefault();
+                      void handleSend();
+                    }
+                  }}
+                />
+                {!input && (
+                  <span className="prompt-placeholder" aria-hidden="true">
+                    <span className="placeholder-full">Welcome to Mado!</span>
+                    <span className="placeholder-short">Welc...</span>
+                  </span>
+                )}
+              </div>
               <div className="codex-selectors" ref={codexMenuRef}>
                 <button
                   className="codex-selector-trigger"
@@ -469,8 +477,11 @@ function App() {
                   aria-label="Codex のモデルと推論レベル"
                   aria-expanded={isCodexMenuOpen}
                 >
-                  <span>
+                  <span className="selector-label-full">
                     {codexModelLabel(selectedCodexModel)} / {codexReasoningLabel(selectedCodexReasoning)}
+                  </span>
+                  <span className="selector-label-short">
+                    {codexModelShortLabel(selectedCodexModel)}/{codexReasoningShortLabel(selectedCodexReasoning)}
                   </span>
                   <ChevronDown size={13} />
                 </button>
@@ -642,9 +653,39 @@ function codexModelLabel(value: string) {
   return codexModelOptions.find((option) => option.id === model)?.label ?? model;
 }
 
+function codexModelShortLabel(value: string) {
+  switch (normalizeCodexModel(value)) {
+    case "gpt-5.6-sol":
+      return "5.6 Sol";
+    case "gpt-5.6-terra":
+      return "5.6 Terra";
+    case "gpt-5.6-luna":
+      return "5.6 Luna";
+    case "gpt-5.4-mini":
+      return "5.4 mini";
+    case "gpt-5.4-nano":
+      return "5.4 nano";
+    default:
+      return "5.6 Terra";
+  }
+}
+
 function codexReasoningLabel(value: string) {
   const reasoning = normalizeCodexReasoning(value);
   return (codexReasoningOptions.find((option) => option.value === reasoning)?.label ?? reasoning) || "Default";
+}
+
+function codexReasoningShortLabel(value: string) {
+  switch (normalizeCodexReasoning(value)) {
+    case "":
+      return "Def";
+    case "medium":
+      return "Mid";
+    case "xhigh":
+      return "XHi";
+    default:
+      return codexReasoningLabel(value);
+  }
 }
 
 function CodexProgress({ events }: { events: CodexProgressEvent[] }) {
