@@ -60,6 +60,14 @@ export async function resetCodexConversation() {
   }
 }
 
+export async function respondCodexApproval(approvalId: string, decision: "approve" | "deny") {
+  if (!isTauri) {
+    return;
+  }
+
+  await invoke("respond_codex_approval", { approvalId, decision });
+}
+
 export async function onCodexProgress(handler: (event: CodexProgressEvent) => void) {
   if (!isTauri) {
     return () => {};

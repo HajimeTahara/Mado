@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
-    collections::VecDeque,
+    collections::{HashMap, VecDeque},
     env,
     io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
@@ -21,6 +21,7 @@ pub struct ChatHistoryMessage {
 
 pub struct CodexAgentState {
     conversation: Mutex<CodexConversation>,
+    approvals: Mutex<HashMap<String, mpsc::Sender<String>>>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -31,6 +32,12 @@ pub struct CodexProgressEvent {
     pub message: String,
     pub command: Option<String>,
     pub file_path: Option<String>,
+    pub approval_id: Option<String>,
+    pub title: Option<String>,
+    pub cwd: Option<String>,
+    pub reason: Option<String>,
+    pub options: Option<Vec<String>>,
+    pub app_server_method: Option<String>,
 }
 
 #[derive(Default)]
@@ -43,10 +50,16 @@ impl CodexAgentState {
     pub fn new() -> Self {
         Self {
             conversation: Mutex::new(CodexConversation::default()),
+            approvals: Mutex::new(HashMap::new()),
         }
     }
 
     pub fn reset(&self) {
+        if let Ok(mut approvals) = self.approvals.lock() {
+            for (_, sender) in approvals.drain() {
+                let _ = sender.send("deny".to_string());
+            }
+        }
         if let Ok(mut conversation) = self.conversation.lock() {
             conversation.thread_id = None;
         }
@@ -68,6 +81,7 @@ impl CodexAgentState {
             .conversation
             .lock()
             .map_err(|_| "Codex 会話状態を取得できませんでした。".to_string())?;
+        let approvals = &self.approvals;
         conversation.ask(
             input,
             model,
@@ -75,12 +89,30 @@ impl CodexAgentState {
             history,
             project_path,
             progress,
+            |event| wait_for_approval(approvals, event),
         )
+    }
+
+    pub fn respond_approval(&self, approval_id: &str, decision: &str) -> Result<(), String> {
+        let approval_id = approval_id.trim();
+        if approval_id.is_empty() {
+            return Err("approvalId が空です。".to_string());
+        }
+        let decision = normalize_approval_decision(decision);
+        let sender = self
+            .approvals
+            .lock()
+            .map_err(|_| "Codex 承認状態を取得できませんでした。".to_string())?
+            .remove(approval_id)
+            .ok_or_else(|| format!("待機中の承認要求が見つかりません: {approval_id}"))?;
+        sender
+            .send(decision)
+            .map_err(|_| "Codex 承認要求への応答に失敗しました。".to_string())
     }
 }
 
 impl CodexConversation {
-    fn ask<F>(
+    fn ask<F, A>(
         &mut self,
         input: &str,
         model: &str,
@@ -88,9 +120,11 @@ impl CodexConversation {
         history: &[ChatHistoryMessage],
         project_path: Option<&str>,
         mut progress: F,
+        mut approval: A,
     ) -> Result<String, String>
     where
         F: FnMut(CodexProgressEvent),
+        A: FnMut(&CodexProgressEvent) -> Result<String, String>,
     {
         let project_path = project_path.map(str::to_string);
         if self.project_path != project_path {
@@ -109,20 +143,24 @@ impl CodexConversation {
                 "thread/resume",
                 "Codex thread を再開しています...",
             ));
-            client.request(
+            client.request_with_handlers(
                 "thread/resume",
                 thread_params(thread_id, model, self.project_path.as_deref()),
                 CODEX_TIMEOUT,
+                &mut progress,
+                &mut approval,
             )?
         } else {
             progress(status_event(
                 "thread/start",
                 "Codex thread を開始しています...",
             ));
-            client.request(
+            client.request_with_handlers(
                 "thread/start",
                 thread_params("", model, self.project_path.as_deref()),
                 CODEX_TIMEOUT,
+                &mut progress,
+                &mut approval,
             )?
         };
 
@@ -131,7 +169,7 @@ impl CodexConversation {
             .ok_or_else(|| "Codex thread id を取得できませんでした。".to_string())?;
         self.thread_id = Some(thread_id.clone());
 
-        client.request(
+        client.request_with_handlers(
             "turn/start",
             turn_params(
                 &thread_id,
@@ -141,9 +179,11 @@ impl CodexConversation {
                 self.project_path.as_deref(),
             ),
             CODEX_TIMEOUT,
+            &mut progress,
+            &mut approval,
         )?;
         progress(status_event("turn/start", "応答ターンを開始しました"));
-        client.wait_for_turn(progress)
+        client.wait_for_turn(progress, approval)
     }
 }
 
@@ -266,6 +306,42 @@ impl CodexAppServerClient {
         }
     }
 
+    fn request_with_handlers<P, A>(
+        &mut self,
+        method: &str,
+        params: Value,
+        timeout: Duration,
+        progress: &mut P,
+        approval: &mut A,
+    ) -> Result<Value, String>
+    where
+        P: FnMut(CodexProgressEvent),
+        A: FnMut(&CodexProgressEvent) -> Result<String, String>,
+    {
+        let id = self.next_id;
+        self.next_id += 1;
+        self.write_json(json!({
+            "id": id,
+            "method": method,
+            "params": params
+        }))?;
+
+        loop {
+            let message = self.next_message(timeout)?;
+            if is_server_request(&message) {
+                self.handle_server_request(&message, progress, approval)?;
+                continue;
+            }
+            if message.get("id").and_then(Value::as_i64) == Some(id) {
+                if let Some(error) = message.get("error") {
+                    return Err(format_codex_error(error));
+                }
+                return Ok(message.get("result").cloned().unwrap_or_else(|| json!({})));
+            }
+            self.stashed.push_back(message);
+        }
+    }
+
     fn notify(&mut self, method: &str, params: Value) -> Result<(), String> {
         self.write_json(json!({
             "method": method,
@@ -273,9 +349,10 @@ impl CodexAppServerClient {
         }))
     }
 
-    fn wait_for_turn<F>(&mut self, mut progress: F) -> Result<String, String>
+    fn wait_for_turn<P, A>(&mut self, mut progress: P, mut approval: A) -> Result<String, String>
     where
-        F: FnMut(CodexProgressEvent),
+        P: FnMut(CodexProgressEvent),
+        A: FnMut(&CodexProgressEvent) -> Result<String, String>,
     {
         let mut deltas = String::new();
         let mut completed_messages = Vec::new();
@@ -283,7 +360,7 @@ impl CodexAppServerClient {
         loop {
             let message = self.next_message(CODEX_TIMEOUT)?;
             if is_server_request(&message) {
-                self.decline_request(&message)?;
+                self.handle_server_request(&message, &mut progress, &mut approval)?;
                 continue;
             }
 
@@ -367,6 +444,46 @@ impl CodexAppServerClient {
                 "decision": "decline"
             }
         }))
+    }
+
+    fn accept_request(&mut self, message: &Value, decision: &str) -> Result<(), String> {
+        let Some(id) = message.get("id").and_then(Value::as_i64) else {
+            return Ok(());
+        };
+        self.write_json(json!({
+            "id": id,
+            "result": {
+                "decision": app_server_approval_decision(decision)
+            }
+        }))
+    }
+
+    fn handle_server_request<P, A>(
+        &mut self,
+        message: &Value,
+        progress: &mut P,
+        approval: &mut A,
+    ) -> Result<(), String>
+    where
+        P: FnMut(CodexProgressEvent),
+        A: FnMut(&CodexProgressEvent) -> Result<String, String>,
+    {
+        let Some(event) = approval_event_from_request(message) else {
+            self.decline_request(message)?;
+            return Ok(());
+        };
+        progress(event.clone());
+        let decision = approval(&event).unwrap_or_else(|_| "deny".to_string());
+        self.accept_request(message, &decision)?;
+        progress(status_event(
+            "approval/responded",
+            if app_server_approval_decision(&decision) == "accept" {
+                "承認しました"
+            } else {
+                "拒否しました"
+            },
+        ));
+        Ok(())
     }
 
     fn write_json(&mut self, payload: Value) -> Result<(), String> {
@@ -489,6 +606,188 @@ fn status_event(event_type: &str, message: &str) -> CodexProgressEvent {
         message: message.to_string(),
         command: None,
         file_path: None,
+        approval_id: None,
+        title: None,
+        cwd: None,
+        reason: None,
+        options: None,
+        app_server_method: None,
+    }
+}
+
+fn wait_for_approval(
+    approvals: &Mutex<HashMap<String, mpsc::Sender<String>>>,
+    event: &CodexProgressEvent,
+) -> Result<String, String> {
+    let approval_id = event
+        .approval_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "Codex 承認要求に approvalId が含まれていません。".to_string())?
+        .to_string();
+    let (sender, receiver) = mpsc::channel();
+    {
+        let mut pending = approvals
+            .lock()
+            .map_err(|_| "Codex 承認状態を取得できませんでした。".to_string())?;
+        pending.insert(approval_id.clone(), sender);
+    }
+    let decision = receiver
+        .recv()
+        .map_err(|_| "Codex 承認要求の待機が中断されました。".to_string())?;
+    if let Ok(mut pending) = approvals.lock() {
+        pending.remove(&approval_id);
+    }
+    Ok(decision)
+}
+
+fn approval_event_from_request(message: &Value) -> Option<CodexProgressEvent> {
+    let method = message.get("method").and_then(Value::as_str)?.trim();
+    if !is_approval_request_method(method) {
+        return None;
+    }
+    let params = message.get("params").cloned().unwrap_or_else(|| json!({}));
+    let approval_id = first_json_text(&params, &["approvalId", "itemId"]);
+    let fallback_id = message
+        .get("id")
+        .and_then(Value::as_i64)
+        .map(|id| format!("app-server-request-{id}"))
+        .unwrap_or_else(|| "app-server-request".to_string());
+    let approval_id = if approval_id.is_empty() {
+        fallback_id
+    } else {
+        approval_id
+    };
+    let command = command_text_from_request(&params);
+    let reason = first_json_text(&params, &["reason"]);
+    let file_path = first_json_text(
+        &params,
+        &[
+            "path",
+            "filePath",
+            "targetPath",
+            "relativePath",
+            "absolutePath",
+        ],
+    );
+    let title = if method.contains("commandExecution") || method == "execCommandApproval" {
+        "Codex command approval"
+    } else if method.contains("fileChange") || method == "applyPatchApproval" {
+        "Codex file change approval"
+    } else if method.contains("permissions") {
+        "Codex permission approval"
+    } else {
+        "Codex approval request"
+    };
+    let message_text = [reason.as_str(), command.as_str(), file_path.as_str(), title]
+        .into_iter()
+        .map(str::trim)
+        .find(|value| !value.is_empty())
+        .unwrap_or(title)
+        .to_string();
+
+    Some(CodexProgressEvent {
+        kind: "approval".to_string(),
+        event_type: "approval_request".to_string(),
+        message: message_text,
+        command: if command.is_empty() {
+            None
+        } else {
+            Some(command)
+        },
+        file_path: if file_path.is_empty() {
+            None
+        } else {
+            Some(file_path)
+        },
+        approval_id: Some(approval_id),
+        title: Some(title.to_string()),
+        cwd: first_json_text(&params, &["cwd"]).into_option(),
+        reason: reason.into_option(),
+        options: Some(approval_options(&params)),
+        app_server_method: Some(method.to_string()),
+    })
+}
+
+fn is_approval_request_method(method: &str) -> bool {
+    matches!(
+        method,
+        "item/commandExecution/requestApproval"
+            | "item/fileChange/requestApproval"
+            | "item/permissions/requestApproval"
+            | "execCommandApproval"
+            | "applyPatchApproval"
+    )
+}
+
+fn command_text_from_request(params: &Value) -> String {
+    let Some(command) = params.get("command") else {
+        return String::new();
+    };
+    if let Some(text) = command.as_str() {
+        return text.trim().to_string();
+    }
+    if let Some(items) = command.as_array() {
+        return items
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+    }
+    String::new()
+}
+
+fn approval_options(params: &Value) -> Vec<String> {
+    params
+        .get("availableDecisions")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+        })
+        .filter(|items| !items.is_empty())
+        .unwrap_or_else(|| vec!["accept".to_string(), "decline".to_string()])
+}
+
+fn normalize_approval_decision(value: &str) -> String {
+    let decision = value.trim().to_ascii_lowercase();
+    if matches!(
+        decision.as_str(),
+        "approve" | "approved" | "accept" | "accepted" | "yes" | "allow"
+    ) {
+        "approve".to_string()
+    } else {
+        "deny".to_string()
+    }
+}
+
+fn app_server_approval_decision(value: &str) -> &'static str {
+    if normalize_approval_decision(value) == "approve" {
+        "accept"
+    } else {
+        "decline"
+    }
+}
+
+trait IntoOption {
+    fn into_option(self) -> Option<String>;
+}
+
+impl IntoOption for String {
+    fn into_option(self) -> Option<String> {
+        if self.trim().is_empty() {
+            None
+        } else {
+            Some(self)
+        }
     }
 }
 
@@ -518,6 +817,12 @@ fn progress_event_from_item(method: &str, params: &Value) -> Option<CodexProgres
                     Some(command)
                 },
                 file_path: None,
+                approval_id: None,
+                title: None,
+                cwd: None,
+                reason: None,
+                options: None,
+                app_server_method: None,
             })
         }
         "mcpToolCall" => {
@@ -542,6 +847,12 @@ fn progress_event_from_item(method: &str, params: &Value) -> Option<CodexProgres
                     Some(tool_name)
                 },
                 file_path: None,
+                approval_id: None,
+                title: None,
+                cwd: None,
+                reason: None,
+                options: None,
+                app_server_method: None,
             })
         }
         "reasoning" => Some(CodexProgressEvent {
@@ -550,6 +861,12 @@ fn progress_event_from_item(method: &str, params: &Value) -> Option<CodexProgres
             message: format!("{phase}: 推論"),
             command: None,
             file_path: None,
+            approval_id: None,
+            title: None,
+            cwd: None,
+            reason: None,
+            options: None,
+            app_server_method: None,
         }),
         "fileChange" => {
             let path = first_json_text(
@@ -572,6 +889,12 @@ fn progress_event_from_item(method: &str, params: &Value) -> Option<CodexProgres
                 },
                 command: None,
                 file_path: if path.is_empty() { None } else { Some(path) },
+                approval_id: None,
+                title: None,
+                cwd: None,
+                reason: None,
+                options: None,
+                app_server_method: None,
             })
         }
         "agentMessage" => None,
@@ -581,6 +904,12 @@ fn progress_event_from_item(method: &str, params: &Value) -> Option<CodexProgres
             message: format!("{phase}: {item_type}"),
             command: None,
             file_path: None,
+            approval_id: None,
+            title: None,
+            cwd: None,
+            reason: None,
+            options: None,
+            app_server_method: None,
         }),
     }
 }
@@ -706,7 +1035,7 @@ fn mado_instructions() -> &'static str {
      返答は原則として日本語で、簡潔かつ自然にしてください。\n\
      会話履歴は文脈として扱い、現在のユーザー発話に直接答えてください。\n\
      プロジェクトルールやシステム指示への了解表明だけで終えず、ユーザーが求める回答を返してください。\n\
-     このUIにはまだ承認操作がないため、ローカルファイル変更やコマンド実行が必要な場合は、実行せずに確認事項と手順を説明してください。"
+     ローカルファイル変更やコマンド実行が必要な場合は、Codex app-server の承認要求を使い、ユーザーの承認が得られた範囲で進めてください。"
 }
 
 fn conversation_history_text(history: &[ChatHistoryMessage]) -> String {

@@ -32,6 +32,7 @@ import {
   pickProjectFolder,
   planFileOperation,
   resetCodexConversation,
+  respondCodexApproval,
   setCodexProjectTrust,
   startWindowDrag
 } from "./tauri";
@@ -90,6 +91,8 @@ function App() {
   const [preview, setPreview] = useState<OperationPreview | null>(null);
   const [trustPrompt, setTrustPrompt] = useState<TrustPrompt | null>(null);
   const [progressEvents, setProgressEvents] = useState<CodexProgressEvent[]>([]);
+  const [pendingApproval, setPendingApproval] = useState<CodexProgressEvent | null>(null);
+  const [isRespondingApproval, setIsRespondingApproval] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [isCodexMenuOpen, setIsCodexMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -206,6 +209,9 @@ function App() {
 
     void onCodexProgress((event) => {
       setProgressEvents((current) => [...current, event].slice(-24));
+      if (event.kind === "approval" && event.approvalId) {
+        setPendingApproval(event);
+      }
     }).then((cleanup) => {
       unlisten = cleanup;
     });
@@ -222,6 +228,8 @@ function App() {
     setInput("");
     setIsBusy(true);
     setProgressEvents([]);
+    setPendingApproval(null);
+    setIsRespondingApproval(false);
     const userMessage = makeMessage("user", text);
     const nextMessages = [...messages, userMessage];
     setMessages(nextMessages);
@@ -243,6 +251,8 @@ function App() {
       setMessages((current) => [...current, makeMessage("assistant", answer)]);
     } finally {
       setIsBusy(false);
+      setPendingApproval(null);
+      setIsRespondingApproval(false);
     }
   }
 
@@ -257,8 +267,29 @@ function App() {
     setFiles([]);
     setPreview(null);
     setProgressEvents([]);
+    setPendingApproval(null);
+    setIsRespondingApproval(false);
     setIsSettingsOpen(false);
     void resetCodexConversation();
+  }
+
+  async function handleApprovalDecision(decision: "approve" | "deny") {
+    const approvalId = pendingApproval?.approvalId;
+    if (!approvalId || isRespondingApproval) {
+      return;
+    }
+    setIsRespondingApproval(true);
+    try {
+      await respondCodexApproval(approvalId, decision);
+      setPendingApproval(null);
+      setIsRespondingApproval(false);
+    } catch (error) {
+      setMessages((current) => [
+        ...current,
+        makeMessage("assistant", `Codex 承認への応答に失敗しました。\n\n${String(error)}`)
+      ]);
+      setIsRespondingApproval(false);
+    }
   }
 
   async function handleOpenProject() {
@@ -305,6 +336,8 @@ function App() {
     setFiles([]);
     setPreview(null);
     setProgressEvents([]);
+    setPendingApproval(null);
+    setIsRespondingApproval(false);
     void resetCodexConversation();
   }
 
@@ -347,6 +380,14 @@ function App() {
               )}
             </div>
           </div>
+          {pendingApproval && (
+            <CodexApprovalOverlay
+              approval={pendingApproval}
+              isResponding={isRespondingApproval}
+              onApprove={() => void handleApprovalDecision("approve")}
+              onDeny={() => void handleApprovalDecision("deny")}
+            />
+          )}
         </section>
 
         <form
@@ -601,6 +642,67 @@ function CodexProgress({ events }: { events: CodexProgressEvent[] }) {
   );
 }
 
+function CodexApprovalOverlay({
+  approval,
+  isResponding,
+  onApprove,
+  onDeny
+}: {
+  approval: CodexProgressEvent;
+  isResponding: boolean;
+  onApprove: () => void;
+  onDeny: () => void;
+}) {
+  return (
+    <div className="approval-overlay" role="presentation">
+      <section className="approval-popup" role="dialog" aria-modal="false" aria-labelledby="approval-title">
+        <div className="approval-title">
+          <ShieldCheck size={17} />
+          <div>
+            <h2 id="approval-title">{approval.title || "Codex approval"}</h2>
+            <p>Codex が操作の承認を求めています。</p>
+          </div>
+        </div>
+        <dl className="approval-details">
+          {approval.command && (
+            <div>
+              <dt>Command</dt>
+              <dd>{approval.command}</dd>
+            </div>
+          )}
+          {approval.filePath && (
+            <div>
+              <dt>File</dt>
+              <dd>{approval.filePath}</dd>
+            </div>
+          )}
+          {approval.cwd && (
+            <div>
+              <dt>Working directory</dt>
+              <dd>{approval.cwd}</dd>
+            </div>
+          )}
+          {approval.reason && (
+            <div>
+              <dt>Reason</dt>
+              <dd>{approval.reason}</dd>
+            </div>
+          )}
+        </dl>
+        {!approval.command && !approval.filePath && !approval.reason && <p className="approval-message">{approval.message}</p>}
+        <div className="approval-actions">
+          <button type="button" onClick={onDeny} disabled={isResponding}>
+            拒否
+          </button>
+          <button type="button" className="primary" onClick={onApprove} disabled={isResponding}>
+            {isResponding ? "送信中..." : "承認"}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function progressKindLabel(kind: CodexProgressEvent["kind"]) {
   switch (kind) {
     case "command":
@@ -609,6 +711,8 @@ function progressKindLabel(kind: CodexProgressEvent["kind"]) {
       return "File";
     case "reasoning":
       return "Reasoning";
+    case "approval":
+      return "Approval";
     default:
       return "Status";
   }

@@ -86,6 +86,15 @@ fn reset_codex_conversation(state: tauri::State<'_, CodexAgentState>) {
 }
 
 #[tauri::command]
+fn respond_codex_approval(
+    state: tauri::State<'_, CodexAgentState>,
+    approval_id: String,
+    decision: String,
+) -> Result<(), String> {
+    state.respond_approval(&approval_id, &decision)
+}
+
+#[tauri::command]
 fn pick_project_folder() -> Option<String> {
     rfd::FileDialog::new()
         .set_title("プロジェクトを開く")
@@ -228,6 +237,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             ask_provider,
             reset_codex_conversation,
+            respond_codex_approval,
             pick_project_folder,
             get_codex_project_trust_status,
             set_codex_project_trust,

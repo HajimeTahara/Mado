@@ -1,5 +1,11 @@
 # UPDATE
 
+## ver 0.3.4
+
+- Codex app-server の approval request を Mado 側で受け取り、チャット欄内オーバーレイとして表示する承認ポップアップを追加。
+- 承認ポップアップの「承認」/「拒否」操作を app-server の `accept` / `decline` 応答へ変換して返すように変更。
+- 新規チャットやプロジェクト切り替え時に pending approval を拒否扱いで解除するように変更。
+
 ## ver 0.3.3
 
 - Codex のモデルと推論レベル選択を、Reasoning / Model をまとめた単一ドロップダウンに変更。

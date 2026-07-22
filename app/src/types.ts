@@ -8,11 +8,17 @@ export type Message = {
 };
 
 export type CodexProgressEvent = {
-  kind: "status" | "command" | "reasoning" | "fileChange";
+  kind: "status" | "command" | "reasoning" | "fileChange" | "approval";
   eventType: string;
   message: string;
   command?: string | null;
   filePath?: string | null;
+  approvalId?: string | null;
+  title?: string | null;
+  cwd?: string | null;
+  reason?: string | null;
+  options?: string[] | null;
+  appServerMethod?: string | null;
 };
 
 export type OpenedProject = {

@@ -405,6 +405,7 @@ button {
 }
 
 .conversation-board {
+  position: relative;
   min-height: 0;
   overflow: hidden;
   border-radius: 8px;
@@ -640,6 +641,10 @@ button {
   background: #8fb7ff;
 }
 
+.progress-row.approval .progress-dot {
+  background: #ffcf7a;
+}
+
 .progress-kind {
   display: inline-block;
   margin-right: 6px;
@@ -660,6 +665,133 @@ button {
 
 [data-theme="light"] .progress-kind {
   color: rgba(34, 38, 34, 0.48);
+}
+
+.approval-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  align-items: end;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(4px);
+}
+
+.approval-popup {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  max-height: min(300px, 100%);
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid rgba(255, 207, 122, 0.34);
+  border-radius: 8px;
+  color: var(--mado-text-color, #f8f8f4);
+  background: rgba(18, 21, 21, 0.92);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.34);
+}
+
+.approval-title {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.approval-title h2,
+.approval-title p,
+.approval-message {
+  margin: 0;
+}
+
+.approval-title h2 {
+  font-size: 0.92rem;
+  line-height: 1.25;
+}
+
+.approval-title p,
+.approval-message {
+  color: rgba(244, 244, 240, 0.7);
+  font-size: 0.8rem;
+}
+
+.approval-details {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+
+.approval-details div {
+  display: grid;
+  gap: 2px;
+}
+
+.approval-details dt {
+  color: rgba(244, 244, 240, 0.48);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.approval-details dd {
+  margin: 0;
+  color: rgba(244, 244, 240, 0.82);
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.approval-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.approval-actions button {
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 7px;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+}
+
+.approval-actions button.primary {
+  color: #10201b;
+  background: #78d4be;
+}
+
+.approval-actions button:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
+[data-theme="light"] .approval-overlay {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+[data-theme="light"] .approval-popup {
+  border-color: rgba(180, 127, 34, 0.28);
+  color: var(--mado-text-color, #222622);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 14px 32px rgba(34, 38, 34, 0.16);
+}
+
+[data-theme="light"] .approval-title p,
+[data-theme="light"] .approval-message {
+  color: rgba(34, 38, 34, 0.66);
+}
+
+[data-theme="light"] .approval-details dt {
+  color: rgba(34, 38, 34, 0.48);
+}
+
+[data-theme="light"] .approval-details dd {
+  color: rgba(34, 38, 34, 0.78);
+}
+
+[data-theme="light"] .approval-actions button {
+  background: rgba(34, 38, 34, 0.08);
 }
 
 .settings-popover {
