@@ -1,5 +1,11 @@
 # UPDATE
 
+## ver 0.3.8
+
+- Codex approval request を pending 登録してから UI へ通知する順序に変更し、承認ボタン応答との競合で詰まる可能性を修正。
+- `item/permissions/requestApproval` には protocol に合わせて `permissions` / `scope` を返すように変更。
+- approvalId が null の command approval と permissions approval response の Rust テストを追加。
+
 ## ver 0.3.7
 
 - アプリのウィンドウ位置とサイズを `window-placement.json` に保存し、再起動時に前回の表示位置・サイズを復元するように変更。

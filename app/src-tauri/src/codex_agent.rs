@@ -97,7 +97,7 @@ impl CodexAgentState {
             history,
             project_path,
             progress,
-            |event| wait_for_approval(approvals, event),
+            |event| prepare_approval(approvals, event),
         )
     }
 
@@ -133,7 +133,7 @@ impl CodexConversation {
     ) -> Result<String, String>
     where
         F: FnMut(CodexProgressEvent),
-        A: FnMut(&CodexProgressEvent) -> Result<String, String>,
+        A: FnMut(&CodexProgressEvent) -> Result<mpsc::Receiver<String>, String>,
     {
         let project_path = project_path.map(str::to_string);
         if self.project_path != project_path {
@@ -321,7 +321,7 @@ impl CodexAppServerClient {
     ) -> Result<Value, String>
     where
         P: FnMut(CodexProgressEvent),
-        A: FnMut(&CodexProgressEvent) -> Result<String, String>,
+        A: FnMut(&CodexProgressEvent) -> Result<mpsc::Receiver<String>, String>,
     {
         let id = self.next_id;
         self.next_id += 1;
@@ -362,7 +362,7 @@ impl CodexAppServerClient {
     ) -> Result<String, String>
     where
         P: FnMut(CodexProgressEvent),
-        A: FnMut(&CodexProgressEvent) -> Result<String, String>,
+        A: FnMut(&CodexProgressEvent) -> Result<mpsc::Receiver<String>, String>,
     {
         let id = self.next_id;
         self.next_id += 1;
@@ -488,9 +488,7 @@ impl CodexAppServerClient {
         };
         self.write_json(json!({
             "id": id,
-            "result": {
-                "decision": app_server_approval_decision(decision)
-            }
+            "result": app_server_approval_result(message, decision)
         }))
     }
 
@@ -502,14 +500,23 @@ impl CodexAppServerClient {
     ) -> Result<(), String>
     where
         P: FnMut(CodexProgressEvent),
-        A: FnMut(&CodexProgressEvent) -> Result<String, String>,
+        A: FnMut(&CodexProgressEvent) -> Result<mpsc::Receiver<String>, String>,
     {
         let Some(event) = approval_event_from_request(message) else {
             self.decline_request(message)?;
             return Ok(());
         };
+        let decision_receiver = match approval(&event) {
+            Ok(receiver) => receiver,
+            Err(error) => {
+                self.decline_request(message)?;
+                return Err(error);
+            }
+        };
         progress(event.clone());
-        let decision = approval(&event).unwrap_or_else(|_| "deny".to_string());
+        let decision = decision_receiver
+            .recv()
+            .unwrap_or_else(|_| "deny".to_string());
         self.accept_request(message, &decision)?;
         progress(status_event(
             "approval/responded",
@@ -651,10 +658,10 @@ fn status_event(event_type: &str, message: &str) -> CodexProgressEvent {
     }
 }
 
-fn wait_for_approval(
+fn prepare_approval(
     approvals: &Mutex<HashMap<String, mpsc::Sender<String>>>,
     event: &CodexProgressEvent,
-) -> Result<String, String> {
+) -> Result<mpsc::Receiver<String>, String> {
     let approval_id = event
         .approval_id
         .as_deref()
@@ -669,13 +676,7 @@ fn wait_for_approval(
             .map_err(|_| "Codex 承認状態を取得できませんでした。".to_string())?;
         pending.insert(approval_id.clone(), sender);
     }
-    let decision = receiver
-        .recv()
-        .map_err(|_| "Codex 承認要求の待機が中断されました。".to_string())?;
-    if let Ok(mut pending) = approvals.lock() {
-        pending.remove(&approval_id);
-    }
-    Ok(decision)
+    Ok(receiver)
 }
 
 fn approval_event_from_request(message: &Value) -> Option<CodexProgressEvent> {
@@ -811,6 +812,33 @@ fn app_server_approval_decision(value: &str) -> &'static str {
     } else {
         "decline"
     }
+}
+
+fn app_server_approval_result(message: &Value, decision: &str) -> Value {
+    let method = message.get("method").and_then(Value::as_str).unwrap_or("");
+    if method == "item/permissions/requestApproval" {
+        if normalize_approval_decision(decision) == "approve" {
+            let permissions = message
+                .get("params")
+                .and_then(|params| params.get("permissions"))
+                .cloned()
+                .unwrap_or_else(|| json!({}));
+            return json!({
+                "permissions": permissions,
+                "scope": "turn",
+                "strictAutoReview": true
+            });
+        }
+        return json!({
+            "permissions": {},
+            "scope": "turn",
+            "strictAutoReview": true
+        });
+    }
+
+    json!({
+        "decision": app_server_approval_decision(decision)
+    })
 }
 
 trait IntoOption {
@@ -1116,4 +1144,56 @@ fn format_codex_error(value: &Value) -> String {
         return message.to_string();
     }
     format!("Codex app-server error: {value}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn approval_event_uses_item_id_when_approval_id_is_null() {
+        let event = approval_event_from_request(&json!({
+            "id": 7,
+            "method": "item/commandExecution/requestApproval",
+            "params": {
+                "approvalId": null,
+                "itemId": "item-1",
+                "command": ["pwsh", "-Command", "New-Item test.txt"],
+                "cwd": "C:/tmp/project",
+                "reason": "Need to create a file"
+            }
+        }))
+        .expect("approval event");
+
+        assert_eq!(event.kind, "approval");
+        assert_eq!(event.approval_id.as_deref(), Some("item-1"));
+        assert_eq!(
+            event.command.as_deref(),
+            Some("pwsh -Command New-Item test.txt")
+        );
+    }
+
+    #[test]
+    fn permissions_approval_returns_granted_profile() {
+        let result = app_server_approval_result(
+            &json!({
+                "id": 8,
+                "method": "item/permissions/requestApproval",
+                "params": {
+                    "permissions": {
+                        "fileSystem": { "writableRoots": ["C:/tmp/project"] },
+                        "network": null
+                    }
+                }
+            }),
+            "approve",
+        );
+
+        assert_eq!(result["scope"], "turn");
+        assert_eq!(
+            result["permissions"]["fileSystem"]["writableRoots"][0],
+            "C:/tmp/project"
+        );
+        assert_eq!(result["strictAutoReview"], true);
+    }
 }
