@@ -1,7 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { CodexProgressEvent, CodexProjectTrustStatus, Message, OperationPreview, Provider } from "./types";
+import type {
+  CodexProgressEvent,
+  CodexProjectDefaultsResult,
+  CodexProjectTrustStatus,
+  Message,
+  OperationPreview,
+  Provider
+} from "./types";
 
 const isTauri = "__TAURI_INTERNALS__" in window || "__TAURI__" in window;
 
@@ -40,12 +47,16 @@ export async function setCodexProjectTrust(rootPath: string, trusted: boolean) {
   return await invoke<CodexProjectTrustStatus>("set_codex_project_trust", { rootPath, trusted });
 }
 
-export async function openCodexUserConfig() {
-  return await invoke<string>("open_codex_user_config");
+export async function openCodexDefaultConfig() {
+  return await invoke<string>("open_codex_default_config");
 }
 
-export async function openCodexUserAgents() {
-  return await invoke<string>("open_codex_user_agents");
+export async function openCodexDefaultAgents() {
+  return await invoke<string>("open_codex_default_agents");
+}
+
+export async function applyCodexProjectDefaults(rootPath: string) {
+  return await invoke<CodexProjectDefaultsResult>("apply_codex_project_defaults", { rootPath });
 }
 
 export async function resetCodexConversation() {

@@ -34,6 +34,13 @@ export type CodexProjectTrustStatus = {
   configExists: boolean;
 };
 
+export type CodexProjectDefaultsResult = {
+  projectConfigPath: string;
+  projectAgentsPath: string;
+  copied: string[];
+  skipped: string[];
+};
+
 export type AttachedFile = {
   id: string;
   name: string;

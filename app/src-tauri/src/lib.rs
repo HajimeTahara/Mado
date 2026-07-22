@@ -39,6 +39,15 @@ struct OperationPreview {
     files: Vec<FilePreview>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CodexProjectDefaultsResult {
+    project_config_path: String,
+    project_agents_path: String,
+    copied: Vec<String>,
+    skipped: Vec<String>,
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct WindowPlacement {
@@ -140,21 +149,21 @@ fn set_codex_project_trust(
 }
 
 #[tauri::command]
-fn open_codex_user_config(app: AppHandle) -> Result<String, String> {
-    open_codex_user_file(
-        &app,
-        "config.toml",
-        "# Codex user config\n\n# Example:\n# model = \"gpt-5\"\n",
-    )
+fn open_codex_default_config(app: AppHandle) -> Result<String, String> {
+    open_codex_project_default_file(&app, "config.toml", default_project_config_toml())
 }
 
 #[tauri::command]
-fn open_codex_user_agents(app: AppHandle) -> Result<String, String> {
-    open_codex_user_file(
-        &app,
-        "AGENTS.md",
-        "# AGENTS.md\n\nこのファイルに Codex のデフォルト指示を書けます。\n",
-    )
+fn open_codex_default_agents(app: AppHandle) -> Result<String, String> {
+    open_codex_project_default_file(&app, "AGENTS.md", default_project_agents_md())
+}
+
+#[tauri::command]
+fn apply_codex_project_defaults(
+    app: AppHandle,
+    root_path: String,
+) -> Result<CodexProjectDefaultsResult, String> {
+    apply_codex_project_default_files(&app, &root_path)
 }
 
 #[tauri::command]
@@ -268,8 +277,9 @@ pub fn run() {
             pick_project_folder,
             get_codex_project_trust_status,
             set_codex_project_trust,
-            open_codex_user_config,
-            open_codex_user_agents,
+            open_codex_default_config,
+            open_codex_default_agents,
+            apply_codex_project_defaults,
             translate_text,
             capture_screenshot_translation,
             plan_file_operation
@@ -433,28 +443,24 @@ fn toggle_window(window: &WebviewWindow) {
     }
 }
 
-fn open_codex_user_file(
+fn open_codex_project_default_file(
     app: &AppHandle,
     file_name: &str,
     default_content: &str,
 ) -> Result<String, String> {
-    let home = app
-        .path()
-        .home_dir()
-        .map_err(|error| format!("ユーザーホームフォルダの取得に失敗しました: {error}"))?;
-    let codex_dir = home.join(".codex");
-    fs::create_dir_all(&codex_dir).map_err(|error| {
+    let defaults_dir = codex_project_defaults_dir(app)?;
+    fs::create_dir_all(&defaults_dir).map_err(|error| {
         format!(
-            "Codex 設定フォルダを作成できませんでした ({}): {error}",
-            codex_dir.display()
+            "Codex デフォルト設定フォルダを作成できませんでした ({}): {error}",
+            defaults_dir.display()
         )
     })?;
 
-    let path = codex_dir.join(file_name);
+    let path = defaults_dir.join(file_name);
     if !path.exists() {
         fs::write(&path, default_content).map_err(|error| {
             format!(
-                "Codex 設定ファイルを作成できませんでした ({}): {error}",
+                "Codex デフォルト設定ファイルを作成できませんでした ({}): {error}",
                 path.display()
             )
         })?;
@@ -462,6 +468,121 @@ fn open_codex_user_file(
 
     open_path_with_default_app(&path)?;
     Ok(path.to_string_lossy().to_string())
+}
+
+fn apply_codex_project_default_files(
+    app: &AppHandle,
+    root_path: &str,
+) -> Result<CodexProjectDefaultsResult, String> {
+    let project_root = fs::canonicalize(PathBuf::from(root_path)).map_err(|error| {
+        format!(
+            "プロジェクトフォルダを正規化できませんでした ({}): {error}",
+            root_path
+        )
+    })?;
+    let defaults_dir = codex_project_defaults_dir(app)?;
+    fs::create_dir_all(&defaults_dir).map_err(|error| {
+        format!(
+            "Codex デフォルト設定フォルダを作成できませんでした ({}): {error}",
+            defaults_dir.display()
+        )
+    })?;
+    let default_config = ensure_codex_project_default_file(
+        &defaults_dir,
+        "config.toml",
+        default_project_config_toml(),
+    )?;
+    let default_agents =
+        ensure_codex_project_default_file(&defaults_dir, "AGENTS.md", default_project_agents_md())?;
+
+    let project_codex_dir = project_root.join(".codex");
+    fs::create_dir_all(&project_codex_dir).map_err(|error| {
+        format!(
+            "プロジェクト内の .codex フォルダを作成できませんでした ({}): {error}",
+            project_codex_dir.display()
+        )
+    })?;
+    let project_config = project_codex_dir.join("config.toml");
+    let project_agents = project_root.join("AGENTS.md");
+    let mut copied = Vec::new();
+    let mut skipped = Vec::new();
+
+    copy_default_file_if_missing(
+        &default_config,
+        &project_config,
+        "config.toml",
+        &mut copied,
+        &mut skipped,
+    )?;
+    copy_default_file_if_missing(
+        &default_agents,
+        &project_agents,
+        "AGENTS.md",
+        &mut copied,
+        &mut skipped,
+    )?;
+
+    Ok(CodexProjectDefaultsResult {
+        project_config_path: project_config.to_string_lossy().to_string(),
+        project_agents_path: project_agents.to_string_lossy().to_string(),
+        copied,
+        skipped,
+    })
+}
+
+fn codex_project_defaults_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| format!("Mado 設定フォルダの取得に失敗しました: {error}"))?;
+    Ok(dir.join("codex-project-defaults"))
+}
+
+fn ensure_codex_project_default_file(
+    defaults_dir: &Path,
+    file_name: &str,
+    default_content: &str,
+) -> Result<PathBuf, String> {
+    let path = defaults_dir.join(file_name);
+    if !path.exists() {
+        fs::write(&path, default_content).map_err(|error| {
+            format!(
+                "Codex デフォルト設定ファイルを作成できませんでした ({}): {error}",
+                path.display()
+            )
+        })?;
+    }
+    Ok(path)
+}
+
+fn copy_default_file_if_missing(
+    source: &Path,
+    target: &Path,
+    label: &str,
+    copied: &mut Vec<String>,
+    skipped: &mut Vec<String>,
+) -> Result<(), String> {
+    if target.exists() {
+        skipped.push(label.to_string());
+        return Ok(());
+    }
+    fs::copy(source, target).map_err(|error| {
+        format!(
+            "Codex デフォルト設定をコピーできませんでした ({} -> {}): {error}",
+            source.display(),
+            target.display()
+        )
+    })?;
+    copied.push(label.to_string());
+    Ok(())
+}
+
+fn default_project_config_toml() -> &'static str {
+    "# Project-local Codex config copied by Mado\n\n# Example:\n# model = \"gpt-5\"\n"
+}
+
+fn default_project_agents_md() -> &'static str {
+    "# AGENTS.md\n\nこのファイルに Mado から開く Codex プロジェクト向けのデフォルト指示を書けます。\n"
 }
 
 fn open_path_with_default_app(path: &Path) -> Result<(), String> {

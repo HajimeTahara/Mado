@@ -1,5 +1,10 @@
 # UPDATE
 
+## ver 0.3.9
+
+- 設定の Codex ファイル編集先を PC ユーザーの `~/.codex` ではなく、Mado が管理するプロジェクト用デフォルトファイルへ変更。
+- プロジェクトを開いたとき、未作成の場合にデフォルトの `config.toml` を `.codex/config.toml` へ、`AGENTS.md` をプロジェクト直下へコピーするように追加。
+
 ## ver 0.3.8
 
 - Codex approval request を pending 登録してから UI へ通知する順序に変更し、承認ボタン応答との競合で詰まる可能性を修正。

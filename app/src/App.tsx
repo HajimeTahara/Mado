@@ -23,12 +23,13 @@ import type {
   ProviderSettings
 } from "./types";
 import {
+  applyCodexProjectDefaults,
   askProvider,
   getCodexProjectTrustStatus,
   onCodexProgress,
   onWindowFocusChanged,
-  openCodexUserAgents,
-  openCodexUserConfig,
+  openCodexDefaultAgents,
+  openCodexDefaultConfig,
   pickProjectFolder,
   planFileOperation,
   resetCodexConversation,
@@ -305,7 +306,9 @@ function App() {
       }
       const status = await getCodexProjectTrustStatus(selectedPath);
       if (status.trusted) {
+        const defaultsError = await copyCodexDefaultsToProject(status.projectPath);
         openProject(status.projectPath, true);
+        showCodexDefaultsError(defaultsError);
         return;
       }
       setTrustPrompt({ status, selectedPath, isApplying: false });
@@ -322,13 +325,34 @@ function App() {
     setTrustPrompt((current) => (current ? { ...current, isApplying: true, error: undefined } : current));
     try {
       const status = await setCodexProjectTrust(trustPrompt.selectedPath, trusted);
+      const defaultsError = await copyCodexDefaultsToProject(status.projectPath);
       openProject(status.projectPath, status.trusted);
+      showCodexDefaultsError(defaultsError);
       setTrustPrompt(null);
     } catch (error) {
       setTrustPrompt((current) =>
         current ? { ...current, isApplying: false, error: `Codex trust 設定を更新できませんでした。\n${String(error)}` } : current
       );
     }
+  }
+
+  async function copyCodexDefaultsToProject(projectPath: string) {
+    try {
+      await applyCodexProjectDefaults(projectPath);
+      return "";
+    } catch (error) {
+      return String(error);
+    }
+  }
+
+  function showCodexDefaultsError(error: string) {
+    if (!error) {
+      return;
+    }
+    setMessages((current) => [
+      ...current,
+      makeMessage("assistant", `Codex デフォルトファイルをプロジェクトへコピーできませんでした。\n\n${error}`)
+    ]);
   }
 
   function openProject(path: string, trusted: boolean) {
@@ -768,7 +792,7 @@ function SettingsPanel({
   async function openCodexFile(kind: "config" | "agents") {
     setFileOpenStatus("開いています...");
     try {
-      const path = kind === "config" ? await openCodexUserConfig() : await openCodexUserAgents();
+      const path = kind === "config" ? await openCodexDefaultConfig() : await openCodexDefaultAgents();
       setFileOpenStatus(`開きました: ${path}`);
     } catch (error) {
       setFileOpenStatus(`開けませんでした: ${String(error)}`);
@@ -821,7 +845,7 @@ function SettingsPanel({
         <h3 id="codex-file-settings-title">Codex ファイル</h3>
 
         <div className="setting-group">
-          <h4>デフォルト設定</h4>
+          <h4>プロジェクト用デフォルト</h4>
           <div className="settings-action-grid">
             <button type="button" onClick={() => void openCodexFile("config")}>
               config.toml
@@ -830,6 +854,9 @@ function SettingsPanel({
               AGENTS.md
             </button>
           </div>
+          <p className="settings-note">
+            プロジェクトを開くと、未作成の場合に `.codex/config.toml` と `AGENTS.md` へコピーします。
+          </p>
           {fileOpenStatus && <p className="settings-note file-open-status">{fileOpenStatus}</p>}
         </div>
       </section>
