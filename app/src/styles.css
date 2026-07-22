@@ -385,6 +385,8 @@ button {
 
 .icon-button,
 .mic-button,
+.send-button,
+.new-chat-button,
 .project-button,
 .upload-button,
 .utility-row button,
@@ -417,6 +419,23 @@ button {
   height: 30px;
 }
 
+.send-button,
+.new-chat-button {
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+}
+
+.send-button:disabled,
+.new-chat-button:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+
+.send-button.stop {
+  color: #ffd2d2;
+}
+
 .project-button {
   width: 28px;
   height: 30px;
@@ -440,6 +459,8 @@ button {
 
 .icon-button:hover,
 .mic-button:hover,
+.send-button:hover:not(:disabled),
+.new-chat-button:hover:not(:disabled),
 .project-button:hover,
 .upload-button:hover,
 .utility-row button:hover,
@@ -450,6 +471,8 @@ button {
 
 [data-theme="light"] .icon-button:hover,
 [data-theme="light"] .mic-button:hover,
+[data-theme="light"] .send-button:hover:not(:disabled),
+[data-theme="light"] .new-chat-button:hover:not(:disabled),
 [data-theme="light"] .project-button:hover,
 [data-theme="light"] .upload-button:hover,
 [data-theme="light"] .utility-row button:hover,
@@ -460,6 +483,7 @@ button {
 
 .icon-button.active,
 .mic-button.active,
+.send-button.active,
 .project-button.active {
   color: inherit;
   background: transparent;
@@ -1316,6 +1340,8 @@ button {
   .project-button,
   .upload-button,
   .mic-button,
+  .send-button,
+  .new-chat-button,
   .settings-inline-button {
     width: 26px;
     min-height: 28px;

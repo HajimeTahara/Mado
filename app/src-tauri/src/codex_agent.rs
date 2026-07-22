@@ -6,12 +6,17 @@ use std::{
     io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
     process::{Child, ChildStdin, Command, Stdio},
-    sync::{mpsc, Arc, Mutex},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        mpsc, Arc, Mutex,
+    },
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 const CODEX_TIMEOUT: Duration = Duration::from_secs(300);
+const CODEX_POLL_INTERVAL: Duration = Duration::from_millis(200);
+pub const CODEX_CANCELLED_MESSAGE: &str = "Codex の実行を停止しました。";
 
 #[derive(Debug, Deserialize)]
 pub struct ChatHistoryMessage {
@@ -27,6 +32,7 @@ pub struct CodexAgentState {
 struct CodexAgentInner {
     conversation: Mutex<CodexConversation>,
     approvals: Mutex<HashMap<String, mpsc::Sender<String>>>,
+    cancel_generation: AtomicU64,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -57,19 +63,21 @@ impl CodexAgentState {
             inner: Arc::new(CodexAgentInner {
                 conversation: Mutex::new(CodexConversation::default()),
                 approvals: Mutex::new(HashMap::new()),
+                cancel_generation: AtomicU64::new(0),
             }),
         }
     }
 
     pub fn reset(&self) {
-        if let Ok(mut approvals) = self.inner.approvals.lock() {
-            for (_, sender) in approvals.drain() {
-                let _ = sender.send("deny".to_string());
-            }
-        }
+        self.cancel_current_turn();
         if let Ok(mut conversation) = self.inner.conversation.lock() {
             conversation.thread_id = None;
         }
+    }
+
+    pub fn cancel_current_turn(&self) {
+        self.inner.cancel_generation.fetch_add(1, Ordering::SeqCst);
+        self.drain_pending_approvals("deny");
     }
 
     pub fn ask<F>(
@@ -84,12 +92,14 @@ impl CodexAgentState {
     where
         F: FnMut(CodexProgressEvent),
     {
+        let generation = self.inner.cancel_generation.load(Ordering::SeqCst);
+        let approvals_inner = Arc::clone(&self.inner);
+        let cancel_inner = Arc::clone(&self.inner);
         let mut conversation = self
             .inner
             .conversation
             .lock()
             .map_err(|_| "Codex 会話状態を取得できませんでした。".to_string())?;
-        let approvals = &self.inner.approvals;
         conversation.ask(
             input,
             model,
@@ -97,7 +107,8 @@ impl CodexAgentState {
             history,
             project_path,
             progress,
-            |event| prepare_approval(approvals, event),
+            move |event| prepare_approval(&approvals_inner.approvals, event),
+            move || cancel_inner.cancel_generation.load(Ordering::SeqCst) != generation,
         )
     }
 
@@ -118,10 +129,18 @@ impl CodexAgentState {
             .send(decision)
             .map_err(|_| "Codex 承認要求への応答に失敗しました。".to_string())
     }
+
+    fn drain_pending_approvals(&self, decision: &str) {
+        if let Ok(mut approvals) = self.inner.approvals.lock() {
+            for (_, sender) in approvals.drain() {
+                let _ = sender.send(decision.to_string());
+            }
+        }
+    }
 }
 
 impl CodexConversation {
-    fn ask<F, A>(
+    fn ask<F, A, C>(
         &mut self,
         input: &str,
         model: &str,
@@ -130,11 +149,17 @@ impl CodexConversation {
         project_path: Option<&str>,
         mut progress: F,
         mut approval: A,
+        mut is_cancelled: C,
     ) -> Result<String, String>
     where
         F: FnMut(CodexProgressEvent),
         A: FnMut(&CodexProgressEvent) -> Result<mpsc::Receiver<String>, String>,
+        C: FnMut() -> bool,
     {
+        if is_cancelled() {
+            return Err(CODEX_CANCELLED_MESSAGE.to_string());
+        }
+
         let project_path = project_path.map(str::to_string);
         if self.project_path != project_path {
             self.thread_id = None;
@@ -144,7 +169,10 @@ impl CodexConversation {
         let prompt = build_codex_prompt(input, history);
         progress(status_event("codex/start", "Codex を起動しています..."));
         let mut client = CodexAppServerClient::start("codex", self.project_path.as_deref())?;
-        client.initialize()?;
+        client.initialize(&mut is_cancelled)?;
+        if is_cancelled() {
+            return Err(CODEX_CANCELLED_MESSAGE.to_string());
+        }
         progress(status_event("codex/initialized", "Codex に接続しました"));
 
         let thread_result = if let Some(thread_id) = self.thread_id.as_deref() {
@@ -158,6 +186,7 @@ impl CodexConversation {
                 CODEX_TIMEOUT,
                 &mut progress,
                 &mut approval,
+                &mut is_cancelled,
             )?
         } else {
             progress(status_event(
@@ -170,6 +199,7 @@ impl CodexConversation {
                 CODEX_TIMEOUT,
                 &mut progress,
                 &mut approval,
+                &mut is_cancelled,
             )?
         };
 
@@ -188,6 +218,7 @@ impl CodexConversation {
             ),
             progress,
             approval,
+            is_cancelled,
         )
     }
 }
@@ -267,7 +298,10 @@ impl CodexAppServerClient {
         })
     }
 
-    fn initialize(&mut self) -> Result<(), String> {
+    fn initialize<C>(&mut self, is_cancelled: &mut C) -> Result<(), String>
+    where
+        C: FnMut() -> bool,
+    {
         self.request(
             "initialize",
             json!({
@@ -281,12 +315,22 @@ impl CodexAppServerClient {
                 }
             }),
             Duration::from_secs(30),
+            is_cancelled,
         )?;
         self.notify("initialized", json!({}))?;
         Ok(())
     }
 
-    fn request(&mut self, method: &str, params: Value, timeout: Duration) -> Result<Value, String> {
+    fn request<C>(
+        &mut self,
+        method: &str,
+        params: Value,
+        timeout: Duration,
+        is_cancelled: &mut C,
+    ) -> Result<Value, String>
+    where
+        C: FnMut() -> bool,
+    {
         let id = self.next_id;
         self.next_id += 1;
         self.write_json(json!({
@@ -296,7 +340,7 @@ impl CodexAppServerClient {
         }))?;
 
         loop {
-            let message = self.next_message(timeout)?;
+            let message = self.next_message_interruptible(timeout, is_cancelled)?;
             if is_server_request(&message) {
                 self.decline_request(&message)?;
                 continue;
@@ -311,17 +355,19 @@ impl CodexAppServerClient {
         }
     }
 
-    fn request_with_handlers<P, A>(
+    fn request_with_handlers<P, A, C>(
         &mut self,
         method: &str,
         params: Value,
         timeout: Duration,
         progress: &mut P,
         approval: &mut A,
+        is_cancelled: &mut C,
     ) -> Result<Value, String>
     where
         P: FnMut(CodexProgressEvent),
         A: FnMut(&CodexProgressEvent) -> Result<mpsc::Receiver<String>, String>,
+        C: FnMut() -> bool,
     {
         let id = self.next_id;
         self.next_id += 1;
@@ -332,9 +378,9 @@ impl CodexAppServerClient {
         }))?;
 
         loop {
-            let message = self.next_message(timeout)?;
+            let message = self.next_message_interruptible(timeout, is_cancelled)?;
             if is_server_request(&message) {
-                self.handle_server_request(&message, progress, approval)?;
+                self.handle_server_request(&message, progress, approval, is_cancelled)?;
                 continue;
             }
             if message.get("id").and_then(Value::as_i64) == Some(id) {
@@ -354,15 +400,17 @@ impl CodexAppServerClient {
         }))
     }
 
-    fn start_turn_and_wait<P, A>(
+    fn start_turn_and_wait<P, A, C>(
         &mut self,
         params: Value,
         mut progress: P,
         mut approval: A,
+        mut is_cancelled: C,
     ) -> Result<String, String>
     where
         P: FnMut(CodexProgressEvent),
         A: FnMut(&CodexProgressEvent) -> Result<mpsc::Receiver<String>, String>,
+        C: FnMut() -> bool,
     {
         let id = self.next_id;
         self.next_id += 1;
@@ -377,9 +425,14 @@ impl CodexAppServerClient {
         let mut turn_start_reported = false;
 
         loop {
-            let message = self.next_message(CODEX_TIMEOUT)?;
+            let message = self.next_message_interruptible(CODEX_TIMEOUT, &mut is_cancelled)?;
             if is_server_request(&message) {
-                self.handle_server_request(&message, &mut progress, &mut approval)?;
+                self.handle_server_request(
+                    &message,
+                    &mut progress,
+                    &mut approval,
+                    &mut is_cancelled,
+                )?;
                 continue;
             }
             if message.get("id").and_then(Value::as_i64) == Some(id) {
@@ -454,18 +507,36 @@ impl CodexAppServerClient {
         }
     }
 
-    fn next_message(&mut self, timeout: Duration) -> Result<Value, String> {
+    fn next_message_interruptible<C>(
+        &mut self,
+        timeout: Duration,
+        is_cancelled: &mut C,
+    ) -> Result<Value, String>
+    where
+        C: FnMut() -> bool,
+    {
         if let Some(message) = self.stashed.pop_front() {
             return Ok(message);
         }
-        match self.receiver.recv_timeout(timeout) {
-            Ok(Ok(message)) => Ok(message),
-            Ok(Err(error)) => Err(error),
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                Err("Codex app-server の応答がタイムアウトしました。".to_string())
+
+        let started = Instant::now();
+        loop {
+            if is_cancelled() {
+                return Err(CODEX_CANCELLED_MESSAGE.to_string());
             }
-            Err(mpsc::RecvTimeoutError::Disconnected) => {
-                Err("Codex app-server が終了しました。".to_string())
+
+            let remaining = timeout
+                .checked_sub(started.elapsed())
+                .ok_or_else(|| "Codex app-server の応答がタイムアウトしました。".to_string())?;
+            let wait_time = remaining.min(CODEX_POLL_INTERVAL);
+
+            match self.receiver.recv_timeout(wait_time) {
+                Ok(Ok(message)) => return Ok(message),
+                Ok(Err(error)) => return Err(error),
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err("Codex app-server が終了しました。".to_string());
+                }
             }
         }
     }
@@ -492,15 +563,17 @@ impl CodexAppServerClient {
         }))
     }
 
-    fn handle_server_request<P, A>(
+    fn handle_server_request<P, A, C>(
         &mut self,
         message: &Value,
         progress: &mut P,
         approval: &mut A,
+        is_cancelled: &mut C,
     ) -> Result<(), String>
     where
         P: FnMut(CodexProgressEvent),
         A: FnMut(&CodexProgressEvent) -> Result<mpsc::Receiver<String>, String>,
+        C: FnMut() -> bool,
     {
         let Some(event) = approval_event_from_request(message) else {
             self.decline_request(message)?;
@@ -514,9 +587,18 @@ impl CodexAppServerClient {
             }
         };
         progress(event.clone());
-        let decision = decision_receiver
-            .recv()
-            .unwrap_or_else(|_| "deny".to_string());
+        let decision = loop {
+            if is_cancelled() {
+                self.accept_request(message, "deny")?;
+                return Err(CODEX_CANCELLED_MESSAGE.to_string());
+            }
+
+            match decision_receiver.recv_timeout(CODEX_POLL_INTERVAL) {
+                Ok(decision) => break decision,
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(mpsc::RecvTimeoutError::Disconnected) => break "deny".to_string(),
+            }
+        };
         self.accept_request(message, &decision)?;
         progress(status_event(
             "approval/responded",

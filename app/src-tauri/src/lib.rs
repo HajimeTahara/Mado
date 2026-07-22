@@ -1,7 +1,7 @@
 mod codex_agent;
 mod codex_trust;
 
-use codex_agent::{ChatHistoryMessage, CodexAgentState};
+use codex_agent::{ChatHistoryMessage, CodexAgentState, CODEX_CANCELLED_MESSAGE};
 use codex_trust::CodexProjectTrustStatus;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -89,6 +89,7 @@ async fn ask_provider(
         .await;
         return Ok(match answer {
             Ok(Ok(answer)) => answer,
+            Ok(Err(error)) if error == CODEX_CANCELLED_MESSAGE => String::new(),
             Ok(Err(error)) => format!(
                 "Codex に接続できませんでした。\n\n{error}\n\nCodex CLI のインストール、ログイン状態、`codex app-server --stdio` が利用できるかを確認してください。"
             ),
@@ -112,6 +113,11 @@ async fn ask_provider(
 #[tauri::command]
 fn reset_codex_conversation(state: tauri::State<'_, CodexAgentState>) {
     state.reset();
+}
+
+#[tauri::command]
+fn cancel_codex_turn(state: tauri::State<'_, CodexAgentState>) {
+    state.cancel_current_turn();
 }
 
 #[tauri::command]
@@ -273,6 +279,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             ask_provider,
             reset_codex_conversation,
+            cancel_codex_turn,
             respond_codex_approval,
             pick_project_folder,
             get_codex_project_trust_status,

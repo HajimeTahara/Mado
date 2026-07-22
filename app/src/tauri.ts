@@ -71,6 +71,18 @@ export async function resetCodexConversation() {
   }
 }
 
+export async function cancelCodexTurn() {
+  if (!isTauri) {
+    return;
+  }
+
+  try {
+    await invoke("cancel_codex_turn");
+  } catch {
+    // Cancellation is best-effort; the UI should still become responsive.
+  }
+}
+
 export async function respondCodexApproval(approvalId: string, decision: "approve" | "deny") {
   if (!isTauri) {
     return;

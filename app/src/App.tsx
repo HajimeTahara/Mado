@@ -5,11 +5,14 @@ import {
   FileText,
   FolderOpen,
   Loader2,
+  MessageSquarePlus,
   Mic,
   Moon,
   Plus,
+  Send,
   Settings,
   ShieldCheck,
+  Square,
   Sun,
   Upload
 } from "lucide-react";
@@ -25,6 +28,7 @@ import type {
 import {
   applyCodexProjectDefaults,
   askProvider,
+  cancelCodexTurn,
   getCodexProjectTrustStatus,
   onCodexProgress,
   onWindowFocusChanged,
@@ -250,7 +254,9 @@ function App() {
         messages,
         openedProject?.path
       );
-      setMessages((current) => [...current, makeMessage("assistant", answer)]);
+      if (answer.trim()) {
+        setMessages((current) => [...current, makeMessage("assistant", answer)]);
+      }
     } finally {
       setIsBusy(false);
       setPendingApproval(null);
@@ -273,6 +279,16 @@ function App() {
     setIsRespondingApproval(false);
     setIsSettingsOpen(false);
     void resetCodexConversation();
+  }
+
+  async function handleStopCodex() {
+    if (!isBusy) {
+      return;
+    }
+
+    setPendingApproval(null);
+    setIsRespondingApproval(false);
+    await cancelCodexTurn();
   }
 
   async function handleApprovalDecision(decision: "approve" | "deny") {
@@ -507,6 +523,26 @@ function App() {
                     aria-pressed={isVoiceMode}
                   >
                     <Mic size={17} />
+                  </button>
+                  <button
+                    className={`send-button ${isBusy ? "stop" : ""}`}
+                    type="button"
+                    onClick={() => (isBusy ? void handleStopCodex() : void handleSend())}
+                    disabled={!isBusy && !input.trim()}
+                    title={isBusy ? "停止" : "送信"}
+                    aria-label={isBusy ? "Codex の実行を停止" : "送信"}
+                  >
+                    {isBusy ? <Square size={15} /> : <Send size={16} />}
+                  </button>
+                  <button
+                    className="new-chat-button"
+                    type="button"
+                    onClick={handleNewChat}
+                    disabled={isBusy}
+                    title="新規チャット"
+                    aria-label="新規チャット"
+                  >
+                    <MessageSquarePlus size={16} />
                   </button>
                   <button
                     ref={settingsButtonRef}
