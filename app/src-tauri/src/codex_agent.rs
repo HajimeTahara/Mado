@@ -6,7 +6,7 @@ use std::{
     io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
     process::{Child, ChildStdin, Command, Stdio},
-    sync::{mpsc, Mutex},
+    sync::{mpsc, Arc, Mutex},
     thread,
     time::Duration,
 };
@@ -19,7 +19,12 @@ pub struct ChatHistoryMessage {
     content: String,
 }
 
+#[derive(Clone)]
 pub struct CodexAgentState {
+    inner: Arc<CodexAgentInner>,
+}
+
+struct CodexAgentInner {
     conversation: Mutex<CodexConversation>,
     approvals: Mutex<HashMap<String, mpsc::Sender<String>>>,
 }
@@ -49,18 +54,20 @@ struct CodexConversation {
 impl CodexAgentState {
     pub fn new() -> Self {
         Self {
-            conversation: Mutex::new(CodexConversation::default()),
-            approvals: Mutex::new(HashMap::new()),
+            inner: Arc::new(CodexAgentInner {
+                conversation: Mutex::new(CodexConversation::default()),
+                approvals: Mutex::new(HashMap::new()),
+            }),
         }
     }
 
     pub fn reset(&self) {
-        if let Ok(mut approvals) = self.approvals.lock() {
+        if let Ok(mut approvals) = self.inner.approvals.lock() {
             for (_, sender) in approvals.drain() {
                 let _ = sender.send("deny".to_string());
             }
         }
-        if let Ok(mut conversation) = self.conversation.lock() {
+        if let Ok(mut conversation) = self.inner.conversation.lock() {
             conversation.thread_id = None;
         }
     }
@@ -78,10 +85,11 @@ impl CodexAgentState {
         F: FnMut(CodexProgressEvent),
     {
         let mut conversation = self
+            .inner
             .conversation
             .lock()
             .map_err(|_| "Codex 会話状態を取得できませんでした。".to_string())?;
-        let approvals = &self.approvals;
+        let approvals = &self.inner.approvals;
         conversation.ask(
             input,
             model,
@@ -100,6 +108,7 @@ impl CodexAgentState {
         }
         let decision = normalize_approval_decision(decision);
         let sender = self
+            .inner
             .approvals
             .lock()
             .map_err(|_| "Codex 承認状態を取得できませんでした。".to_string())?

@@ -1,5 +1,10 @@
 # UPDATE
 
+## ver 0.3.5
+
+- Codex 実行中に Tauri の同期 command が承認応答 IPC を塞ぎ、承認待ちでアプリが応答なしになる問題を修正。
+- `ask_provider` を async command 化し、Codex app-server の待機処理を blocking worker に移して UI 操作と承認応答を処理できるように変更。
+
 ## ver 0.3.4
 
 - Codex app-server の approval request を Mado 側で受け取り、チャット欄内オーバーレイとして表示する承認ポップアップを追加。

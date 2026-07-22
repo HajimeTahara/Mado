@@ -39,7 +39,7 @@ struct OperationPreview {
 }
 
 #[tauri::command]
-fn ask_provider(
+async fn ask_provider(
     window: tauri::Window,
     state: tauri::State<'_, CodexAgentState>,
     input: String,
@@ -48,36 +48,43 @@ fn ask_provider(
     reasoning_effort: Option<String>,
     history: Option<Vec<ChatHistoryMessage>>,
     project_path: Option<String>,
-) -> String {
+) -> Result<String, String> {
     if provider == "codex" {
-        return match state.ask(
-            &input,
-            &model,
-            reasoning_effort.as_deref(),
-            &history.unwrap_or_default(),
-            project_path.as_deref(),
-            |event| {
-                let _ = window.emit("codex-progress", event);
-            },
-        ) {
-            Ok(answer) => answer,
-            Err(error) => format!(
+        let state = state.inner().clone();
+        let history = history.unwrap_or_default();
+        let answer = tauri::async_runtime::spawn_blocking(move || {
+            state.ask(
+                &input,
+                &model,
+                reasoning_effort.as_deref(),
+                &history,
+                project_path.as_deref(),
+                |event| {
+                    let _ = window.emit("codex-progress", event);
+                },
+            )
+        })
+        .await;
+        return Ok(match answer {
+            Ok(Ok(answer)) => answer,
+            Ok(Err(error)) => format!(
                 "Codex に接続できませんでした。\n\n{error}\n\nCodex CLI のインストール、ログイン状態、`codex app-server --stdio` が利用できるかを確認してください。"
             ),
-        };
+            Err(error) => format!("Codex の実行タスクが停止しました。\n\n{error}"),
+        });
     }
 
     if looks_like_translation(&input) {
-        return translate_text(input);
+        return Ok(translate_text(input));
     }
 
     if looks_like_file_operation(&input) {
-        return "これはファイル操作の依頼に見えます。Mado は実行前に対象ファイルと操作内容をプレビューします。MVP では安全のため実行ボタンを無効にしています。".to_string();
+        return Ok("これはファイル操作の依頼に見えます。Mado は実行前に対象ファイルと操作内容をプレビューします。MVP では安全のため実行ボタンを無効にしています。".to_string());
     }
 
-    format!(
+    Ok(format!(
         "Mado MVP は {provider} / {model} の設定で受け取りました。\n\n実プロバイダー接続前のローカル応答モードです。短い質問とファイル操作プレビューの流れを確認できます。"
-    )
+    ))
 }
 
 #[tauri::command]
